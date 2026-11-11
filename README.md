@@ -1,6 +1,6 @@
-# SHERLOG VLAK – PWA (Web Bluetooth)
+# SHERLOG RMJ – PWA (Web Bluetooth)
 
-Webová aplikace pro Chrome na Androidu, která se přes Bluetooth LE připojí k jednotce SHERLOG VLAK
+Webová aplikace pro Chrome na Androidu, která se přes Bluetooth LE připojí k jednotce SHERLOG RMJ
 (služby 5400–5408 dle specifikace z 15. 3. 2026) a zobrazuje její data.
 
 ## Nasazení na GitHub Pages

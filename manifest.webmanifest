@@ -1,7 +1,7 @@
 {
-  "name": "SHERLOG VLAK",
+  "name": "SHERLOG RMJ",
   "short_name": "Sherlog",
-  "description": "Zobrazení dat jednotky SHERLOG VLAK přes Bluetooth LE",
+  "description": "Zobrazení dat jednotky SHERLOG RMJ přes Bluetooth LE",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

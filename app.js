@@ -1,8 +1,8 @@
-/* SHERLOG VLAK – PWA pro Web Bluetooth (Chrome / Android)
+/* SHERLOG RMJ – PWA pro Web Bluetooth (Chrome / Android)
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.1.2';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = { endian: 'le', mode: 'notify', poll: 1000, slow: 5, prefix: 'D3R', red: 60, yellow: 180, sound: '1', theme: 'light' };
@@ -241,7 +241,8 @@ async function scanAndConnect() {
   $('scanErr').textContent = '';
   try {
     const opts = { optionalServices: [...SVC_ALL, 0x180a, '6e400001-b5a3-f393-e0a9-e50e24dcca9e'] };
-    if (S.prefix) opts.filters = [{ namePrefix: S.prefix }]; else opts.acceptAllDevices = true;
+    // filtry se sčítají (OR): název D3R… NEBO zařízení vysílající službu 5400 (např. simulátor na Windows)
+    if (S.prefix) opts.filters = [{ namePrefix: S.prefix }, { services: [uuid16(SVC_LOCAL)] }]; else opts.acceptAllDevices = true;
     const dev = await navigator.bluetooth.requestDevice(opts);
     await connectDevice(dev);
   } catch (e) {
