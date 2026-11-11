@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.1.2';
+const APP_VERSION = '0.1.3';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = { endian: 'le', mode: 'notify', poll: 1000, slow: 5, prefix: 'D3R', red: 60, yellow: 180, sound: '1', theme: 'light' };
@@ -178,7 +178,7 @@ async function readChar(u, id) {
     const dv = await gatt(() => ch.readValue());
     store(u, id, new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(), 'read');
   } catch (e) {
-    log(`Chyba čtení ${hex4(u.svc)}/${hex4(id)}: ${e.message}`);
+    log(`Chyba čtení ${hex4(u.svc)}/${hex4(id)}: ${errText(e)}`);
     if (!device || !device.gatt.connected) throw e;
   }
 }
@@ -237,18 +237,27 @@ async function pump() {
 }
 
 /* ====================== Připojení ====================== */
+function errText(e) {
+  if (e == null) return 'neznámá chyba';
+  if (typeof e === 'string') return e;
+  const parts = [e.name, e.message, e.code != null ? 'kód ' + e.code : ''].filter(Boolean);
+  if (parts.length) return parts.join(': ');
+  try { return JSON.stringify(e); } catch (x) { return String(e); }
+}
 async function scanAndConnect() {
   $('scanErr').textContent = '';
   try {
-    const opts = { optionalServices: [...SVC_ALL, 0x180a, '6e400001-b5a3-f393-e0a9-e50e24dcca9e'] };
+    // UUID vždy jako plný text – některé prohlížeče (např. Bluefy na iOS) číselné aliasy nepřijímají
+    const opts = { optionalServices: [...SVC_ALL.map(uuid16), uuid16(0x180a), '6e400001-b5a3-f393-e0a9-e50e24dcca9e'] };
     // filtry se sčítají (OR): název D3R… NEBO zařízení vysílající službu 5400 (např. simulátor na Windows)
     if (S.prefix) opts.filters = [{ namePrefix: S.prefix }, { services: [uuid16(SVC_LOCAL)] }]; else opts.acceptAllDevices = true;
     const dev = await navigator.bluetooth.requestDevice(opts);
     await connectDevice(dev);
   } catch (e) {
-    if (e.name === 'NotFoundError') $('scanErr').textContent = 'Výběr zrušen nebo nenalezeno žádné zařízení.';
-    else $('scanErr').textContent = 'Chyba: ' + e.message;
-    log('Vyhledání/připojení selhalo: ' + e.message);
+    const msg = errText(e);
+    if (e && e.name === 'NotFoundError') $('scanErr').textContent = 'Výběr zrušen nebo nenalezeno žádné zařízení. (' + msg + ')';
+    else $('scanErr').textContent = 'Chyba: ' + msg;
+    log('Vyhledání/připojení selhalo: ' + msg);
   }
 }
 
@@ -289,7 +298,7 @@ async function setupGatt() {
   log(`ConManager: připojeno, služby: ${units.filter((u) => u.present).map((u) => hex4(u.svc)).join(' ')}`);
 
   // Přihlášení: zápis čísla vlaku a telefonu (po připojení se v jednotce nulují)
-  if (local.present) await writeIdentity().catch((e) => { log('Zápis identifikace selhal: ' + e.message); banner('Nepodařilo se zapsat číslo vlaku/telefon: ' + e.message, 'red'); });
+  if (local.present) await writeIdentity().catch((e) => { log('Zápis identifikace selhal: ' + errText(e)); banner('Nepodařilo se zapsat číslo vlaku/telefon: ' + errText(e), 'red'); });
 
   // Notifikace / indikace
   for (const u of units) {
@@ -302,7 +311,7 @@ async function setupGatt() {
           if (id === 0x0001) { u.lastNotify = Date.now(); u.dirty = true; }
         });
         await gatt(() => ch.startNotifications());
-      } catch (e) { log(`Notifikace ${hex4(u.svc)}/${hex4(id)} nelze zapnout: ${e.message}`); }
+      } catch (e) { log(`Notifikace ${hex4(u.svc)}/${hex4(id)} nelze zapnout: ${errText(e)}`); }
     }
   }
   pump();
@@ -734,7 +743,7 @@ function init() {
     navigator.bluetooth.getDevices().then((devs) => {
       if (!devs.length) return;
       $('knownDevices').innerHTML = '<p class="hint">Dříve spárovaná zařízení:</p>' + devs.map((d, i) => `<div class="dev"><div>${esc(d.name || 'Unknown Device')}<small>${esc(d.id)}</small></div><button class="btn" data-i="${i}">Připojit</button></div>`).join('');
-      $('knownDevices').querySelectorAll('button').forEach((b) => { b.onclick = () => connectDevice(devs[+b.dataset.i]).catch((e) => { $('scanErr').textContent = 'Chyba: ' + e.message; showScreen('scrScan'); }); });
+      $('knownDevices').querySelectorAll('button').forEach((b) => { b.onclick = () => connectDevice(devs[+b.dataset.i]).catch((e) => { $('scanErr').textContent = 'Chyba: ' + errText(e); showScreen('scrScan'); }); });
     }).catch(() => {});
   }
   window.addEventListener('beforeunload', (e) => { LS.set('sv.log', logLines.slice(-3000)); if (connected) { e.preventDefault(); e.returnValue = ''; } });
