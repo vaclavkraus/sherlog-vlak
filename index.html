@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SHERLOG VLAK</title>
+<meta name="theme-color" content="#1f3277">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#e9edf3; --panel:#ffffff; --ink:#15213a; --muted:#5b6780; --line:#b9c3d6;
+  --head:#1f3277; --head-ink:#ffffff; --accent:#1f3277; --accent-ink:#fff;
+  --green:#14a34a; --yellow:#f2b705; --red:#e0261b; --grey:#9aa4b5; --blue:#2f6fd6;
+  --chip:#eef1f7;
+}
+:root[data-theme="dark"]{
+  --bg:#0b1020; --panel:#141b2e; --ink:#e8ecf5; --muted:#93a0bb; --line:#2a3550;
+  --head:#0f1a3d; --head-ink:#e8ecf5; --accent:#3a5bd0; --accent-ink:#fff; --chip:#1d2640;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+header{position:sticky;top:0;z-index:5;background:var(--head);color:var(--head-ink);display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top))}
+header h1{font-size:18px;margin:0;flex:1;font-weight:600}
+header button{background:none;border:0;color:inherit;font-size:20px;padding:6px 8px;border-radius:8px;cursor:pointer}
+header button:active{background:rgba(255,255,255,.15)}
+.conn-dot{width:10px;height:10px;border-radius:50%;background:var(--grey);display:inline-block}
+.conn-dot.ok{background:var(--green)} .conn-dot.wait{background:var(--yellow)} .conn-dot.err{background:var(--red)}
+main{padding:12px;max-width:760px;margin:0 auto;padding-bottom:110px}
+.screen{display:none}.screen.active{display:block}
+fieldset{border:1.5px solid var(--line);border-radius:12px;background:var(--panel);margin:0 0 12px;padding:10px 12px 12px}
+legend{padding:0 6px;font-weight:600;color:var(--ink)}
+label.row{display:flex;align-items:center;gap:10px;margin:10px 0}
+label.row span{flex:0 0 120px;color:var(--muted)}
+input,select{font:inherit;padding:10px 12px;border-radius:8px;border:1.5px solid var(--line);background:var(--panel);color:var(--ink);width:100%;min-width:0}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:inherit;font-weight:600;letter-spacing:.03em;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:12px 18px;cursor:pointer;text-transform:uppercase;font-size:14px}
+.btn.secondary{background:var(--chip);color:var(--ink);border:1.5px solid var(--line)}
+.btn.block{display:block;width:100%}
+.btn:disabled{opacity:.5}
+.hint{color:var(--muted);font-size:13px;margin:6px 0}
+.err{color:var(--red);font-weight:600}
+.summary{display:flex;justify-content:space-between;align-items:center}
+.summary .lines div{font-variant-numeric:tabular-nums}
+.big-ico{font-size:30px;opacity:.8}
+/* semafor */
+.signal{display:flex;gap:14px;align-items:center}
+.lamp{width:64px;height:64px;border-radius:50%;background:var(--grey);flex:0 0 auto;box-shadow:inset 0 -6px 12px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;text-align:center}
+.lamp.green{background:var(--green)} .lamp.yellow{background:var(--yellow);color:#222} .lamp.red{background:var(--red);animation:pulse 0.8s infinite}
+@keyframes pulse{50%{filter:brightness(1.5)}}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;flex:1}
+.kpi .k{color:var(--muted);font-size:12px}
+.kpi .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:13px;font-weight:500;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:12px;white-space:nowrap}
+.chip.red{background:var(--red);border-color:var(--red);color:#fff}
+.chip.yellow{background:var(--yellow);border-color:var(--yellow);color:#222}
+.chip.green{background:var(--green);border-color:var(--green);color:#fff}
+.chip.blue{background:var(--blue);border-color:var(--blue);color:#fff}
+/* trains */
+.train{border:1.5px solid var(--line);border-left:8px solid var(--blue);border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--panel)}
+.train.red{border-left-color:var(--red)} .train.yellow{border-left-color:var(--yellow)} .train.stale{opacity:.6}
+.train .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.train .name{font-weight:700;font-size:17px}
+.train .dist{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 10px;margin-top:4px;font-size:13px}
+.grid3 b{display:block;font-size:15px;font-variant-numeric:tabular-nums}
+.grid3 span{color:var(--muted);font-size:11px}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:14px}
+.dl dt{color:var(--muted)} .dl dd{margin:0;font-variant-numeric:tabular-nums;text-align:right}
+canvas#radar{width:100%;max-width:420px;aspect-ratio:1;display:block;margin:0 auto}
+/* device list */
+.dev{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:8px 0}
+.dev small{display:block;color:var(--muted)}
+/* bottom bar */
+.bottombar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1.5px solid var(--line);display:none;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));z-index:6}
+.bottombar.active{display:flex}
+.sos{width:76px;height:76px;border-radius:50%;background:var(--red);color:#fff;border:4px solid #fff;box-shadow:0 0 0 2px var(--red);font-weight:900;font-size:20px;position:relative;overflow:hidden;cursor:pointer;flex:0 0 auto;margin-top:-30px}
+.sos.on{animation:pulse .6s infinite}
+.sos .fill{position:absolute;left:0;bottom:0;width:100%;height:0;background:rgba(0,0,0,.35)}
+.sos span{position:relative}
+/* log */
+pre.log{background:var(--chip);border-radius:8px;padding:8px;font:11px/1.35 ui-monospace,Consolas,monospace;max-height:50vh;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0}
+table.diag{width:100%;border-collapse:collapse;font:12px/1.3 ui-monospace,Consolas,monospace}
+table.diag td,table.diag th{border-bottom:1px solid var(--line);padding:3px 4px;text-align:left;vertical-align:top}
+table.diag th{color:var(--muted);font-weight:600}
+table.diag td:nth-child(4){white-space:nowrap}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tabs button{flex:1;padding:10px 4px;font-size:12px;letter-spacing:0;min-width:0}
+.tabs .btn.secondary.sel{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.banner{background:var(--yellow);color:#222;padding:8px 12px;border-radius:8px;margin-bottom:10px;font-weight:600;display:none}
+.banner.show{display:block}
+.banner.red{background:var(--red);color:#fff}
+dialog{border:0;border-radius:12px;padding:16px;max-width:340px;width:90%;background:var(--panel);color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.dlg-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.mute{font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Zadání vstupních dat</h1>
+  <span class="conn-dot" id="connDot" title="Stav připojení"></span>
+  <button id="btnMute" title="Ztlumit alarm" hidden>🔔</button>
+  <button id="btnDisconnect" title="Odpojit" hidden>⇋</button>
+  <button id="btnSettings" title="Nastavení">⚙</button>
+</header>
+
+<main>
+  <div class="banner" id="banner"></div>
+
+  <!-- 1. Zadání vstupních dat -->
+  <section class="screen active" id="scrInput">
+    <fieldset>
+      <legend>Údaje strojvedoucího</legend>
+      <label class="row"><span>Kontakt</span><input id="inKontakt" placeholder="Jméno / ID strojvedoucího" autocomplete="off"></label>
+      <label class="row"><span>Telefonní číslo</span><input id="inTelefon" inputmode="tel" placeholder="703 470 195" autocomplete="off"></label>
+      <label class="row"><span>Číslo vlaku</span><input id="inVlak" inputmode="numeric" placeholder="např. 845003" autocomplete="off"></label>
+      <p class="hint">Číslo vlaku a telefon se po každém připojení zapíší do jednotky (charakteristiky 0003 a 0004). Kontakt slouží jen pro log.</p>
+      <p class="err" id="inErr"></p>
+    </fieldset>
+    <button class="btn block" id="btnContinue">Pokračovat</button>
+  </section>
+
+  <!-- 2. Vyhledání zařízení -->
+  <section class="screen" id="scrScan">
+    <fieldset><legend>Zadané údaje</legend>
+      <div class="summary"><div class="lines" id="sumScan"></div><div class="big-ico">👤</div></div>
+    </fieldset>
+    <fieldset><legend>Nalezená zařízení</legend>
+      <p class="hint" id="btSupport"></p>
+      <div id="knownDevices"></div>
+      <button class="btn block" id="btnScan">Vyhledat a připojit jednotku</button>
+      <p class="hint">Chrome otevře seznam BLE zařízení v dosahu, vyberte jednotku SHERLOG (např. D3R_Sherlog_TEST) a potvrďte „Spárovat“.</p>
+      <p class="err" id="scanErr"></p>
+    </fieldset>
+    <button class="btn block secondary" id="btnSim">Spustit simulaci (bez jednotky)</button>
+    <p class="hint">Simulace generuje data ve stejném formátu jako jednotka, slouží k vyzkoušení aplikace.</p>
+    <button class="btn block secondary" id="btnBackInput" style="margin-top:10px">Zpět na zadání údajů</button>
+  </section>
+
+  <!-- 3. Hlavní panel -->
+  <section class="screen" id="scrMain">
+    <div class="tabs">
+      <button class="btn secondary sel" data-tab="tabPrehled">Přehled</button>
+      <button class="btn secondary" data-tab="tabRadar">Radar</button>
+      <button class="btn secondary" data-tab="tabJednotka">Jednotka</button>
+      <button class="btn secondary" data-tab="tabDiag">Diagnostika</button>
+    </div>
+
+    <div class="tab" id="tabPrehled">
+      <fieldset><legend>Sledované údaje</legend>
+        <div class="signal">
+          <div class="lamp" id="lamp">—</div>
+          <div class="kpis">
+            <div class="kpi"><div class="k">Nejbližší vlak (kolej)</div><div class="v" id="kNearest">—</div></div>
+            <div class="kpi"><div class="k">Čas do střetu</div><div class="v" id="kCrash">—</div></div>
+            <div class="kpi"><div class="k">SOS</div><div class="v" id="kSos">—</div></div>
+            <div class="kpi"><div class="k">Alert</div><div class="v" id="kAlert">—</div></div>
+          </div>
+        </div>
+        <div class="chips" id="localChips"></div>
+      </fieldset>
+      <fieldset><legend>Vlaky v dosahu <span id="trainCount"></span></legend>
+        <div id="trains"><p class="hint">Zatím žádná přijatá jednotka.</p></div>
+      </fieldset>
+      <fieldset><legend>Připojené zařízení</legend>
+        <div class="summary"><div class="lines" id="sumDev"></div><div class="big-ico">📡</div></div>
+      </fieldset>
+    </div>
+
+    <div class="tab" id="tabRadar" hidden>
+      <fieldset><legend>Radar (nahoru = směr jízdy)</legend>
+        <canvas id="radar" width="800" height="800"></canvas>
+        <p class="hint">Poloha vlaků podle azimutu vůči směru jízdy (0013) a vzdušné vzdálenosti (0014). Barva podle odhadu času do střetu.</p>
+      </fieldset>
+    </div>
+
+    <div class="tab" id="tabJednotka" hidden>
+      <fieldset><legend>Vlastní jednotka (služba 5400)</legend>
+        <dl class="dl" id="localDl"></dl>
+      </fieldset>
+      <fieldset><legend>Zadané údaje</legend>
+        <div class="summary"><div class="lines" id="sumMain"></div><div class="big-ico">👤</div></div>
+        <button class="btn secondary block" id="btnRewrite" style="margin-top:8px">Znovu zapsat číslo vlaku a telefon</button>
+      </fieldset>
+    </div>
+
+    <div class="tab" id="tabDiag" hidden>
+      <fieldset><legend>Log</legend>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn secondary" id="btnLogDl">Stáhnout log</button>
+          <button class="btn secondary" id="btnCsvDl">Stáhnout CSV</button>
+          <button class="btn secondary" id="btnLogClear">Vymazat</button>
+        </div>
+        <pre class="log" id="logView"></pre>
+      </fieldset>
+      <fieldset><legend>Charakteristiky (surová data)</legend>
+        <select id="diagUnit"></select>
+        <div style="overflow-x:auto;margin-top:8px"><table class="diag" id="diagTable"></table></div>
+      </fieldset>
+    </div>
+  </section>
+
+  <!-- Nastavení -->
+  <section class="screen" id="scrSettings">
+    <fieldset><legend>Komunikace</legend>
+      <label class="row"><span>Pořadí bajtů</span><select id="setEndian"><option value="le">Little-endian (výchozí)</option><option value="be">Big-endian</option></select></label>
+      <label class="row"><span>Režim čtení</span><select id="setMode"><option value="notify">Notifikace TIMESTAMP</option><option value="poll">Periodické čtení</option></select></label>
+      <label class="row"><span>Perioda čtení [ms]</span><input id="setPoll" type="number" min="200" step="100"></label>
+      <label class="row"><span>Pomalé údaje [s]</span><input id="setSlow" type="number" min="1" step="1"></label>
+      <label class="row"><span>Filtr názvu</span><input id="setPrefix" placeholder="D3R (prázdné = vše)"></label>
+    </fieldset>
+    <fieldset><legend>Výstrahy</legend>
+      <label class="row"><span>Červená ≤ [s]</span><input id="setRed" type="number" min="0"></label>
+      <label class="row"><span>Žlutá ≤ [s]</span><input id="setYellow" type="number" min="0"></label>
+      <p class="hint">Prahy času do střetu pro obarvení vlaků v seznamu a na radaru. Hlavní semafor vždy přebírá stav z jednotky (0027).</p>
+      <label class="row"><span>Zvuk alarmu</span><select id="setSound"><option value="1">Zapnuto</option><option value="0">Vypnuto</option></select></label>
+      <label class="row"><span>Vzhled</span><select id="setTheme"><option value="light">Denní</option><option value="dark">Noční</option></select></label>
+    </fieldset>
+    <button class="btn block" id="btnSettingsBack">Uložit a zpět</button>
+    <p class="hint" style="text-align:center;margin-top:16px">SHERLOG VLAK PWA · verze <span id="ver"></span></p>
+  </section>
+</main>
+
+<div class="bottombar" id="bottombar">
+  <div class="hint" id="bbStatus" style="flex:1">—</div>
+  <button class="sos" id="btnSos" title="Podržte 2 s"><div class="fill" id="sosFill"></div><span>SOS</span></button>
+</div>
+
+<dialog id="dlg"><div id="dlgText"></div><div class="dlg-btns"><button class="btn secondary" id="dlgNo">Ne</button><button class="btn" id="dlgYes">Ano</button></div></dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
