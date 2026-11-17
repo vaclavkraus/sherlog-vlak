@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.1.6';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = { endian: 'le', mode: 'notify', poll: 1000, slow: 5, prefix: 'D3R', red: 60, yellow: 180, sound: '1', theme: 'light' };
@@ -18,7 +18,8 @@ const SVC_LOCAL = 0x5400;
 const SVC_REMOTE = [0x5401, 0x5402, 0x5403, 0x5404, 0x5405, 0x5406, 0x5407, 0x5408];
 const SVC_ALL = [SVC_LOCAL, ...SVC_REMOTE];
 const uuid16 = (n) => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
-const short16 = (u) => parseInt(u.slice(4, 8), 16);
+// Chrome vrací plné UUID (0000xxxx-0000-1000-8000-00805f9b34fb), Bluefy na iOS jen krátké „xxxx“ nebo „0x…“
+const short16 = (u) => { const t = String(u).trim().toLowerCase().replace(/^0x/, ''); return t.length <= 8 ? parseInt(t, 16) : parseInt(t.slice(4, 8), 16); };
 const hex4 = (n) => n.toString(16).toUpperCase().padStart(4, '0');
 
 /* ====================== Dekodéry ====================== */
@@ -759,12 +760,17 @@ function init() {
     };
   });
 
-  // SOS – podržet 2 s
-  const sos = $('btnSos'); let holdT = null, holdStart = 0, raf = null;
-  const resetHold = () => { clearTimeout(holdT); cancelAnimationFrame(raf); holdT = null; $('sosFill').style.height = '0'; };
-  const anim = () => { const p = Math.min(1, (Date.now() - holdStart) / 2000); $('sosFill').style.height = p * 100 + '%'; if (p < 1) raf = requestAnimationFrame(anim); };
-  sos.addEventListener('pointerdown', (e) => { e.preventDefault(); ensureAudio(); holdStart = Date.now(); anim(); holdT = setTimeout(() => { resetHold(); try { navigator.vibrate && navigator.vibrate(300); } catch (er) { /* ignore */ } toggleSos(); }, 2000); });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => sos.addEventListener(ev, () => { if (holdT) { resetHold(); banner('SOS: tlačítko podržte 2 sekundy'); setTimeout(() => banner(''), 2500); } }));
+  // SOS – 3× za sebou stisknout (mezi stisky max. 0,7 s)
+  const sos = $('btnSos'); let taps = 0, tapT = null;
+  const resetTaps = () => { taps = 0; clearTimeout(tapT); tapT = null; $('sosFill').style.height = '0'; };
+  sos.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); ensureAudio();
+    taps++; clearTimeout(tapT);
+    $('sosFill').style.height = (taps / 3) * 100 + '%';
+    try { navigator.vibrate && navigator.vibrate(taps < 3 ? 40 : 300); } catch (er) { /* ignore */ }
+    if (taps >= 3) { resetTaps(); toggleSos(); return; }
+    tapT = setTimeout(() => { resetTaps(); banner('SOS: stiskněte tlačítko 3× rychle za sebou'); setTimeout(() => banner(''), 2500); }, 700);
+  });
   sos.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // Podpora Web Bluetooth
