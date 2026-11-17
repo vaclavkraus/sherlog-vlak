@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.1.3';
+const APP_VERSION = '0.1.4';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = { endian: 'le', mode: 'notify', poll: 1000, slow: 5, prefix: 'D3R', red: 60, yellow: 180, sound: '1', theme: 'light' };
@@ -142,12 +142,26 @@ function store(u, id, bytes, source) {
   const d = D[id]; if (!d) return;
   u.raw[id] = bytes; u.readAt[id] = Date.now();
   try { u.val[id] = d.dec(bytes); } catch (e) { u.val[id] = { v: null, t: 'chyba dekódování' }; }
-  if (u.svc !== SVC_LOCAL && (id === 0x0002 || id === 0x0001)) {
-    const ts = u.val[0x0001] && u.val[0x0001].v, rk = u.val[0x0002] && u.val[0x0002].v;
-    const was = u.active; u.active = !!(ts && rk);
-    if (was !== u.active) log(`Slot ${hex4(u.svc)}: ${u.active ? 'aktivní ' + (rk || '') : 'prázdný'}`);
-  }
+  if (u.svc !== SVC_LOCAL && (id === 0x0002 || id === 0x0001)) updateActive(u);
   if (source === 'notify') log(`Notify ${hex4(u.svc)}/${hex4(id)} ${d.n} = ${u.val[id].t}`, true);
+}
+
+/* Slot okolního vlaku je aktivní, když jeho služba existuje a chodí na ni notifikace TIMESTAMP
+   (dle vývojářů FW: prázdný slot buď ve službách vůbec není, nebo na něj nechodí notifikace).
+   V režimu periodického čtení (bez notifikací) se použije TIMESTAMP ≠ 0 a RADKOD ≠ 0. */
+const STALE_MS = 6000;
+function updateActive(u) {
+  if (u.svc === SVC_LOCAL) return;
+  let act;
+  if (!u.present) act = false;
+  else if (S.mode === 'notify' && !simulating) act = Date.now() - u.lastNotify < STALE_MS;
+  else if (simulating) act = Date.now() - u.lastNotify < STALE_MS;
+  else { const ts = u.val[0x0001] && u.val[0x0001].v, rk = u.val[0x0002] && u.val[0x0002].v; act = !!(ts && rk); }
+  if (act !== u.active) {
+    u.active = act;
+    const rk = u.val[0x0002] && u.val[0x0002].v;
+    log(`Slot ${hex4(u.svc)}: ${act ? 'aktivní ' + (rk || '') : 'neaktivní (bez notifikací)'}`);
+  }
 }
 
 /* ====================== Log ====================== */
@@ -180,6 +194,9 @@ async function readChar(u, id) {
   } catch (e) {
     log(`Chyba čtení ${hex4(u.svc)}/${hex4(id)}: ${errText(e)}`);
     if (!device || !device.gatt.connected) throw e;
+    if (u.svc !== SVC_LOCAL && e && (e.name === 'InvalidStateError' || e.name === 'NotFoundError')) {
+      u.present = false; updateActive(u); log(`Služba ${hex4(u.svc)} zanikla – vlak mimo dosah`);
+    }
   }
 }
 async function writeChar(u, id, bytes) {
@@ -196,7 +213,7 @@ function cycleList(u) {
   const due = (id, period) => !u.readAt[id] || now - u.readAt[id] >= period;
   const out = [];
   if (u.svc !== SVC_LOCAL && !u.active) {
-    for (const id of [0x0001, 0x0002]) if (u.chars.has(id)) out.push(id);
+    if (S.mode === 'poll') for (const id of [0x0001, 0x0002]) if (u.chars.has(id)) out.push(id);
     return out;
   }
   for (const id of list) {
@@ -232,7 +249,7 @@ async function pump() {
         render();
       }
     }
-  } catch (e) { log('Plánovač čtení přerušen: ' + e.message); }
+  } catch (e) { log('Plánovač čtení přerušen: ' + errText(e)); }
   finally { pumpRunning = false; }
 }
 
@@ -282,15 +299,7 @@ async function setupGatt() {
   server = await device.gatt.connect();
   units = SVC_ALL.map(newUnit);
   chain = Promise.resolve();
-  for (const u of units) {
-    try {
-      const s = await server.getPrimaryService(uuid16(u.svc));
-      const chs = await s.getCharacteristics();
-      u.present = true;
-      for (const ch of chs) u.chars.set(short16(ch.uuid), ch);
-      log(`Služba ${hex4(u.svc)}: ${chs.length} charakteristik (${[...u.chars.keys()].map(hex4).join(' ')})`);
-    } catch (e) { /* služba neexistuje */ }
-  }
+  for (const u of units) await discoverUnit(u);
   const local = unitBy(SVC_LOCAL);
   if (!units.some((u) => u.present)) throw new Error('Zařízení nemá služby 5400–5408');
   connected = true;
@@ -301,21 +310,44 @@ async function setupGatt() {
   if (local.present) await writeIdentity().catch((e) => { log('Zápis identifikace selhal: ' + errText(e)); banner('Nepodařilo se zapsat číslo vlaku/telefon: ' + errText(e), 'red'); });
 
   // Notifikace / indikace
-  for (const u of units) {
-    if (!u.present) continue;
-    for (const id of u.svc === SVC_LOCAL ? [0x0001, 0x0003, 0x0004, 0x0031] : [0x0001]) {
-      const ch = u.chars.get(id); if (!ch || !(ch.properties.notify || ch.properties.indicate)) continue;
-      try {
-        ch.addEventListener('characteristicvaluechanged', (ev) => {
-          const dv = ev.target.value; store(u, id, new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(), 'notify');
-          if (id === 0x0001) { u.lastNotify = Date.now(); u.dirty = true; }
-        });
-        await gatt(() => ch.startNotifications());
-      } catch (e) { log(`Notifikace ${hex4(u.svc)}/${hex4(id)} nelze zapnout: ${errText(e)}`); }
-    }
-  }
+  for (const u of units) if (u.present) await subscribeUnit(u);
   pump();
 }
+
+async function discoverUnit(u) {
+  try {
+    const s = await gatt(() => server.getPrimaryService(uuid16(u.svc)));
+    const chs = await gatt(() => s.getCharacteristics());
+    u.chars = new Map();
+    for (const ch of chs) u.chars.set(short16(ch.uuid), ch);
+    u.present = true;
+    log(`Služba ${hex4(u.svc)}: ${chs.length} charakteristik (${[...u.chars.keys()].map(hex4).join(' ')})`);
+    return true;
+  } catch (e) { return false; /* služba neexistuje */ }
+}
+
+async function subscribeUnit(u) {
+  for (const id of u.svc === SVC_LOCAL ? [0x0001, 0x0003, 0x0004, 0x0031] : [0x0001]) {
+    const ch = u.chars.get(id); if (!ch || !(ch.properties.notify || ch.properties.indicate)) continue;
+    try {
+      ch.addEventListener('characteristicvaluechanged', (ev) => {
+        const dv = ev.target.value; store(u, id, new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(), 'notify');
+        if (id === 0x0001) { u.lastNotify = Date.now(); u.dirty = true; updateActive(u); }
+      });
+      await gatt(() => ch.startNotifications());
+    } catch (e) { log(`Notifikace ${hex4(u.svc)}/${hex4(id)} nelze zapnout: ${errText(e)}`); }
+  }
+}
+
+/* Služby okolních vlaků mohou vznikat a zanikat za běhu (vlak se objeví / zmizí).
+   Každých 10 s se zkusí najít chybějící služby 5401–5408. */
+setInterval(async () => {
+  if (!connected || simulating || !server || !device || !device.gatt.connected) return;
+  for (const u of units) {
+    if (u.svc === SVC_LOCAL || u.present) continue;
+    if (await discoverUnit(u)) { log(`Nová služba ${hex4(u.svc)} – vlak v dosahu`); await subscribeUnit(u); u.dirty = true; }
+  }
+}, 10000);
 
 async function writeIdentity() {
   const local = unitBy(SVC_LOCAL);
@@ -344,7 +376,7 @@ async function onDisconnected() {
     await sleep(wait);
     if (userDisconnect) return;
     try { await setupGatt(); reconnectTry = 0; banner(''); log('ConManager: spojení obnoveno'); return; }
-    catch (e) { log('Obnova připojení selhala: ' + e.message); }
+    catch (e) { log('Obnova připojení selhala: ' + errText(e)); }
   }
 }
 
@@ -371,7 +403,7 @@ async function toggleSos() {
     store(local, 0x0031, uintToBytes(next, 4));
     log(`SOS ${on ? 'deaktivováno' : 'AKTIVOVÁNO'}`);
     await readChar(local, 0x0031);
-  } catch (e) { banner('Zápis SOS selhal: ' + e.message, 'red'); log('Zápis SOS selhal: ' + e.message); }
+  } catch (e) { banner('Zápis SOS selhal: ' + errText(e), 'red'); log('Zápis SOS selhal: ' + errText(e)); }
   render();
 }
 
@@ -641,7 +673,7 @@ function startSim() {
       let d = tr.d0 + tr.v * t; if (d < 150) { d = 150; } if (tr.v < 0 && d <= 150) tr.v = 0;
       const tc = tr.v < 0 ? Math.round(d / -tr.v) : tr.v > 0 ? 65535 : 0;
       if (tr.v < 0 && tc <= S.red) red = true; else if (tr.v < 0 && tc <= S.yellow) yellow = true;
-      put(u, 0x0001, gps); put(u, 0x0002, tr.rk); put(u, 0x0003, tr.no); put(u, 0x0004, tr.tel); put(u, 0x0005, '1234R' + (tr.svc - 0x5400));
+      put(u, 0x0002, tr.rk); u.lastNotify = Date.now(); put(u, 0x0001, gps); put(u, 0x0003, tr.no); put(u, 0x0004, tr.tel); put(u, 0x0005, '1234R' + (tr.svc - 0x5400));
       put(u, 0x0006, (-70 + Math.round(Math.sin(t / 3) * 6) + 32 + 256) % 256);
       put(u, 0x0007, 0x8000 | (5 << 8) | (2 << 4) | 1);
       let fl = 2 ** 0 + 2 ** 29 + (3 * 2 ** 19) + (5 * 2 ** 21) + (2 * 2 ** 16) + (tr.v ? 2 ** 14 : 0);
@@ -712,7 +744,7 @@ function init() {
   $('btnSettingsBack').onclick = () => { saveSettingsForm(); showScreen(prevScreen); };
   $('btnDisconnect').onclick = async () => { if (await confirmDlg('<b>Odpojit?</b><p>Chcete se odpojit od ' + esc(simulating ? 'simulace' : (device && device.name) || 'jednotky') + '?</p>')) disconnect(); };
   $('btnMute').onclick = () => { muteUntil = Date.now() + 60000; $('btnMute').textContent = '🔕'; setTimeout(() => { $('btnMute').textContent = '🔔'; }, 60000); log('Alarm ztlumen na 60 s'); };
-  $('btnRewrite').onclick = () => { if (simulating) return; writeIdentity().then(() => banner('')).catch((e) => banner('Zápis selhal: ' + e.message, 'red')); };
+  $('btnRewrite').onclick = () => { if (simulating) return; writeIdentity().then(() => banner('')).catch((e) => banner('Zápis selhal: ' + errText(e), 'red')); };
   $('btnLogDl').onclick = () => download(`${today()}.log`, logLines.join('\r\n'), 'text/plain');
   $('btnCsvDl').onclick = () => download(`sherlog_${today()}.csv`, ['cas;slot;radkod;vlak;flags;status;lat;lon;rychlost_kmh;smer;dist1d_m;dist2d_m;crashtime_s;sat', ...csvRows.map((r) => r.join(';'))].join('\r\n'), 'text/csv');
   $('btnLogClear').onclick = async () => { if (await confirmDlg('Vymazat log?')) { logLines = []; csvRows = []; LS.set('sv.log', []); renderLogSoon(); } };
@@ -748,7 +780,7 @@ function init() {
   }
   window.addEventListener('beforeunload', (e) => { LS.set('sv.log', logLines.slice(-3000)); if (connected) { e.preventDefault(); e.returnValue = ''; } });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-  setInterval(() => { if (curScreen === 'scrMain') render(); }, 1000);
+  setInterval(() => { for (const u of units) updateActive(u); if (curScreen === 'scrMain') render(); }, 1000);
   showScreen('scrInput');
 }
 
