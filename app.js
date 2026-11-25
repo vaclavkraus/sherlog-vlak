@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.2.3';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = {
@@ -486,17 +486,19 @@ async function keepAwake() { try { if ('wakeLock' in navigator && !wakeLock) { w
 /* ====================== UI ====================== */
 const $ = (id) => document.getElementById(id);
 let curScreen = 'scrInput', prevScreen = 'scrInput', curTab = 'tabPrehled';
-const TITLES = { scrLogin: 'Přihlášení', scrInput: 'Zadání vstupních dat', scrScan: 'Vyhledání zařízení', scrMain: 'Hlavní panel', scrSettings: 'Nastavení' };
+const TITLES = { scrDriver: 'SHERLOG RMJ', scrLogin: 'Přihlášení', scrInput: 'Zadání vstupních dat', scrScan: 'Vyhledání zařízení', scrMain: 'Hlavní panel', scrSettings: 'Nastavení' };
 function showScreen(id) {
+  if (id === 'scrMain' && user && !isAdmin()) id = 'scrDriver'; // strojvedoucí má jednoduchou obrazovku
   if (id !== 'scrSettings') prevScreen = id;
   curScreen = id;
   document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
   $('title').textContent = TITLES[id];
-  const inMain = id === 'scrMain';
-  $('bottombar').classList.toggle('active', inMain);
+  const drv = id === 'scrDriver';
+  const inMain = id === 'scrMain' || drv;
+  $('bottombar').classList.toggle('active', id === 'scrMain');
   $('btnDisconnect').hidden = !inMain;
   $('btnMute').hidden = !inMain;
-  $('btnSettings').hidden = !user || id === 'scrSettings';
+  $('btnSettings').hidden = !isAdmin() || id === 'scrSettings';
   $('btnLogout').hidden = !user;
   $('btnInputBack').hidden = !(connected || simulating);
   if (inMain) { keepAwake(); render(); }
@@ -510,10 +512,12 @@ function renderSummaries() {
   const vlak = input.vlak || '—';
   const html = `<div><b>${esc(input.kontakt || '—')}</b></div><div>Tel.: ${esc(fmtPhone(phoneDigits(input.telefon)))}</div><div>Vlak: ${esc(vlak)}</div>`
     + (user ? `<div class="hint">Přihlášen: ${esc(user.name || user.u)} (${user.role === 'admin' ? 'admin' : 'strojvedoucí'})</div>` : '');
-  $('sumScan').innerHTML = html; $('sumMain').innerHTML = html; $('sumUser').innerHTML = html;
+  $('sumScan').innerHTML = html; $('sumMain').innerHTML = html; $('sumUser').innerHTML = html; $('sumDrv').innerHTML = html + '<div class="edit-hint">Klepnutím upravíte</div>';
   const name = simulating ? 'SIMULACE' : device ? device.name || '(bez názvu)' : '—';
   const st = $('connDot').title || '—';
   $('sumDev').innerHTML = `<div><b>${esc(name)}</b></div><div class="hint">${esc(device && !simulating ? device.id : '')}</div><div>${esc(st)}</div>`;
+  const dc = $('connDot').className.includes('ok') ? 'var(--green)' : $('connDot').className.includes('err') ? 'var(--red)' : $('connDot').className.includes('wait') ? 'var(--yellow)' : 'var(--grey)';
+  $('sumDrvDev').innerHTML = `<div><b>${esc(name)}</b></div><div><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${dc};vertical-align:-2px"></span> ${esc(st)}</div>`;
 }
 
 function trainColor(u) {
@@ -527,7 +531,7 @@ function trainColor(u) {
 let renderQueued = false;
 function render() { if (renderQueued) return; renderQueued = true; requestAnimationFrame(() => { renderQueued = false; doRender(); }); }
 function doRender() {
-  if (curScreen !== 'scrMain') return;
+  if (curScreen !== 'scrMain' && curScreen !== 'scrDriver') return;
   const local = unitBy(SVC_LOCAL);
   const V = (u, id) => u.val[id] || {};
   const T = (u, id) => (u.val[id] ? u.val[id].t : '—');
@@ -550,7 +554,9 @@ function doRender() {
   if (sosRemote.length) level = 2;
   const al = evalAlerts(remotes);
   if (al.some((a) => !a.ack)) level = 2;
+  if (curScreen === 'scrDriver') level = al.some((a) => !a.ack) || sosRemote.length ? 2 : 0; // strojvedoucí: jen alert
   setAlarm(level);
+  if (curScreen === 'scrDriver') renderDriver(al, remotes, sosLocal);
   renderAlertCard(al);
 
   // nejbližší
@@ -635,7 +641,8 @@ function renderAlertOv() {
   if (alertIdx >= alertList.length) alertIdx = alertList.length - 1;
   const a = alertList[alertIdx], u = a.u, V = (id) => u.val[id] || {};
   const crew = isCrew(u);
-  $('alertBox').className = 'alert-box' + (a.red ? '' : ' yellow');
+  const drv = curScreen === 'scrDriver';
+  $('alertBox').className = 'alert-box' + (a.red || drv ? '' : ' yellow') + (drv ? ' drv' : '');
   $('alIco').src = crew ? 'ikona-ceta.png' : 'ikona-vlak.png';
   const sos = V(0x0008).v != null && bit(V(0x0008).v, 12);
   $('alTitle').textContent = sos ? 'SOS – ' + (crew ? 'pracovní četa' : 'vlak') : crew ? 'Pozor, pracovní četa!' : 'Blíží se vlak!';
@@ -649,9 +656,31 @@ function renderAlertOv() {
     ['Číslo vlaku', V(0x0003).t], ['Rádiový kód', V(0x0002).t], ['Traťový úsek', V(0x0005).t],
     ['Telefon', V(0x0004).v ? `<a href="tel:+${esc(V(0x0004).v)}">${esc(V(0x0004).t)}</a>` : '—', true], ['Poslední příjem', V(0x0012).t],
   ];
-  $('alDl').innerHTML = rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v || '—')}</dd>`).join('');
+  const shown = drv ? rows.filter(([k]) => ['Vzdálenost po trati', 'Čas do možného střetu', 'Rychlost', 'Číslo vlaku', 'Rádiový kód', 'Telefon'].includes(k)) : rows;
+  $('alDl').innerHTML = shown.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v || '—')}</dd>`).join('');
+  $('alClose').textContent = drv ? 'Potvrdit a zavřít' : 'Zavřít';
   $('alPos').textContent = alertList.length > 1 ? `${alertIdx + 1} / ${alertList.length}` : '';
   $('alPrev').hidden = $('alNext').hidden = alertList.length < 2;
+}
+
+/* ====================== Obrazovka strojvedoucího ====================== */
+function renderDriver(al, remotes, sosLocal) {
+  const st = $('drvState');
+  let cls = '', icon = '…', title = '', sub = '';
+  if (!connected && !simulating) { title = 'Nepřipojeno'; sub = $('connDot').title || 'Jednotka není připojena'; icon = '✕'; }
+  else if (al.length) {
+    const a = al[0]; cls = 'alert'; icon = '!';
+    title = (isCrew(a.u) ? 'POZOR, ČETA' : 'BLÍŽÍ SE VLAK') + ' – ' + fmtDist((a.u.val[0x0015] && a.u.val[0x0015].v) || (a.u.val[0x0014] && a.u.val[0x0014].v));
+    sub = 'Klepnutím zobrazíte podrobnosti' + (al.length > 1 ? ` (${al.length} jednotky)` : '');
+  } else {
+    cls = 'ok'; icon = '✓'; title = 'Bez výstrahy';
+    let best = null; for (const u of remotes) { const d = (u.val[0x0015] && u.val[0x0015].v) || (u.val[0x0014] && u.val[0x0014].v); if (d && (best == null || d < best)) best = d; }
+    sub = remotes.length ? `V dosahu ${remotes.length} ${remotes.length === 1 ? 'jednotka' : remotes.length < 5 ? 'jednotky' : 'jednotek'}, nejbližší ${fmtDist(best)}` : 'Žádný vlak v dosahu';
+  }
+  st.className = 'drv-state ' + cls; $('drvDot').textContent = icon; $('drvTitle').textContent = title; $('drvSub').textContent = sub;
+  $('drvSos').classList.toggle('on', sosLocal);
+  const h = $('drvSosHint'); h.classList.toggle('on', sosLocal);
+  h.textContent = sosLocal ? 'SOS VYHLÁŠENO – pro zrušení stiskněte znovu 3×' : 'Pro vyhlášení SOS stiskněte 3× rychle za sebou';
 }
 
 /* ====================== Karta Log ====================== */
@@ -972,7 +1001,7 @@ function saveSettingsForm() {
 
 function init() {
   $('ver').textContent = APP_VERSION; $('verLogin').textContent = APP_VERSION; $('verInput').textContent = APP_VERSION;
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && curScreen === 'scrMain') keepAwake(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && (curScreen === 'scrMain' || curScreen === 'scrDriver')) keepAwake(); });
   applyTheme();
   $('inKontakt').value = input.kontakt; $('inTelefon').value = input.telefon; $('inVlak').value = input.vlak;
 
@@ -1041,17 +1070,23 @@ function init() {
   });
 
   // SOS – 3× za sebou stisknout (mezi stisky max. 0,7 s)
-  const sos = $('btnSos'); let taps = 0, tapT = null;
-  const resetTaps = () => { taps = 0; clearTimeout(tapT); tapT = null; $('sosFill').style.height = '0'; };
-  sos.addEventListener('pointerdown', (e) => {
-    e.preventDefault(); ensureAudio();
-    taps++; clearTimeout(tapT);
-    $('sosFill').style.height = (taps / 3) * 100 + '%';
-    try { navigator.vibrate && navigator.vibrate(taps < 3 ? 40 : 300); } catch (er) { /* ignore */ }
-    if (taps >= 3) { resetTaps(); toggleSos(); return; }
-    tapT = setTimeout(() => { resetTaps(); banner('SOS: stiskněte tlačítko 3× rychle za sebou'); setTimeout(() => banner(''), 2500); }, 700);
-  });
-  sos.addEventListener('contextmenu', (e) => e.preventDefault());
+  const bindSos = (sos, fill) => {
+    let taps = 0, tapT = null;
+    const resetTaps = () => { taps = 0; clearTimeout(tapT); tapT = null; fill.style.height = '0'; };
+    sos.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); ensureAudio();
+      taps++; clearTimeout(tapT);
+      fill.style.height = (taps / 3) * 100 + '%';
+      try { navigator.vibrate && navigator.vibrate(taps < 3 ? 40 : 300); } catch (er) { /* ignore */ }
+      if (taps >= 3) { resetTaps(); toggleSos(); return; }
+      tapT = setTimeout(() => { resetTaps(); banner('SOS: stiskněte tlačítko 3× rychle za sebou'); setTimeout(() => banner(''), 2500); }, 700);
+    });
+    sos.addEventListener('contextmenu', (e) => e.preventDefault());
+  };
+  bindSos($('btnSos'), $('sosFill'));
+  bindSos($('drvSos'), $('drvSosFill'));
+  $('drvUser').onclick = () => $('cardUser').onclick();
+  $('drvState').onclick = () => { if (alertList.length) openAlert(0); };
 
   // Podpora Web Bluetooth
   const ok = !!(navigator.bluetooth && window.isSecureContext);
@@ -1066,7 +1101,7 @@ function init() {
   }
   window.addEventListener('beforeunload', (e) => { LS.set('sv.log', logLines.slice(-3000)); if (connected) { e.preventDefault(); e.returnValue = ''; } });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
-  setInterval(() => { for (const u of units) updateActive(u); if (curScreen === 'scrMain') render(); }, 1000);
+  setInterval(() => { for (const u of units) updateActive(u); if (curScreen === 'scrMain' || curScreen === 'scrDriver') render(); }, 1000);
   const sess = loadSession();
   if (sess) { onLoggedIn(sess); verifySession(); } else { showScreen('scrLogin'); loadUsers(); }
 }

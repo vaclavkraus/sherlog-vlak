@@ -97,6 +97,25 @@ dialog{border:0;border-radius:12px;padding:16px;max-width:340px;width:90%;backgr
 dialog::backdrop{background:rgba(0,0,0,.5)}
 .dlg-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .mute{font-size:13px}
+/* ---- obrazovka strojvedoucího ---- */
+.drv-state{border:3px solid var(--line);border-radius:16px;background:var(--panel);padding:18px 16px;display:flex;align-items:center;gap:16px;margin-bottom:14px}
+.drv-state .dot{width:84px;height:84px;border-radius:50%;background:var(--grey);flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-size:40px;box-shadow:inset 0 -6px 12px rgba(0,0,0,.25)}
+.drv-state b{display:block;font-size:24px;line-height:1.15}
+.drv-state span{color:var(--muted);font-size:15px}
+.drv-state.ok{border-color:var(--green)} .drv-state.ok .dot{background:var(--green)}
+.drv-state.alert{border-color:var(--red);background:#fdecea} .drv-state.alert .dot{background:var(--red);animation:pulse .8s infinite} .drv-state.alert b{color:var(--red)}
+:root[data-theme="dark"] .drv-state.alert{background:#3a1512}
+.drv-state.alert{cursor:pointer}
+.drv-sos-wrap{display:flex;flex-direction:column;align-items:center;margin:22px 0 10px}
+.drv-sos{width:190px;height:190px;border-radius:50%;background:var(--red);color:#fff;border:8px solid #fff;box-shadow:0 0 0 4px var(--red),0 8px 24px rgba(0,0,0,.25);font-weight:900;font-size:52px;position:relative;overflow:hidden;cursor:pointer;touch-action:manipulation}
+.drv-sos.on{animation:pulse .6s infinite}
+.drv-sos .fill{position:absolute;left:0;bottom:0;width:100%;height:0;background:rgba(0,0,0,.35)}
+.drv-sos span{position:relative}
+.drv-sos-hint{margin-top:10px;font-size:15px;color:var(--muted);text-align:center}
+.drv-sos-hint.on{color:var(--red);font-weight:800;font-size:18px}
+.alert-box.drv .alert-ico{width:110px;height:110px}
+.alert-box.drv .alert-dl{font-size:19px}
+.alert-box.drv #alClose{font-size:20px;padding:16px}
 /* přihlášení */
 .login-logo{text-align:center;margin:18px 0 10px}
 .login-logo b{display:block;font-size:34px;letter-spacing:.04em;color:var(--head)}
@@ -129,7 +148,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
 .alert-sub{font-size:14px;color:var(--muted);margin-top:4px}
 .alert-dist{font-size:44px;font-weight:900;text-align:center;margin:12px 0 2px;font-variant-numeric:tabular-nums}
 .alert-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:17px;margin:10px 0}
-.alert-dl dt{color:var(--muted)} .alert-dl dd{margin:0;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.alert-dl dt{color:var(--muted)} .alert-dl dd{margin:0;font-weight:700;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .alert-reason{background:var(--chip);border-radius:8px;padding:8px 10px;font-size:14px;margin:8px 0}
 .alert-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
 .logview-box{background:var(--panel);color:var(--ink);border-radius:12px;width:100%;max-width:900px;height:90vh;display:flex;flex-direction:column;padding:12px}
@@ -283,6 +302,21 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
         <div class="row-btns" style="margin-bottom:6px"><button class="btn secondary" id="btnDiagAll">⟳ Načíst vše</button></div>
         <div id="diagList"></div>
       </fieldset>
+    </div>
+  </section>
+
+  <!-- Hlavní obrazovka strojvedoucího (role driver) -->
+  <section class="screen" id="scrDriver">
+    <div class="drv-state" id="drvState"><div class="dot" id="drvDot">✓</div><div><b id="drvTitle">—</b><span id="drvSub"></span></div></div>
+    <fieldset class="card-click" id="drvUser"><legend>Zadané údaje</legend>
+      <div class="summary"><div class="lines" id="sumDrv"></div><div class="big-ico">👤</div></div>
+    </fieldset>
+    <fieldset><legend>Připojené zařízení</legend>
+      <div class="summary"><div class="lines" id="sumDrvDev"></div><div class="big-ico">📡</div></div>
+    </fieldset>
+    <div class="drv-sos-wrap">
+      <button class="drv-sos" id="drvSos"><div class="fill" id="drvSosFill"></div><span>SOS</span></button>
+      <div class="drv-sos-hint" id="drvSosHint">Pro vyhlášení SOS stiskněte 3× rychle za sebou</div>
     </div>
   </section>
 
