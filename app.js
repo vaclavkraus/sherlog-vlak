@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.2.2';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = {
@@ -178,9 +178,14 @@ function updateActive(u) {
   if (u.svc === SVC_LOCAL) return;
   let act;
   if (!u.present) act = false;
-  else if (S.mode === 'notify' && !simulating) act = Date.now() - u.lastNotify < STALE_MS;
   else if (simulating) act = Date.now() - u.lastNotify < STALE_MS;
-  else { const ts = u.val[0x0001] && u.val[0x0001].v, rk = u.val[0x0002] && u.val[0x0002].v; act = !!(ts && rk); }
+  else {
+    // Podle přečtených hodnot: obsazený slot má nenulový TIMESTAMP i RADKOD.
+    // (Notifikaci nelze spolehlivě přiřadit ke službě – Bluefy na iOS ji doručí jen poslední
+    //  odebírané charakteristice se stejným UUID, proto slouží jen jako podnět ke čtení.)
+    const ts = u.val[0x0001] && u.val[0x0001].v, rk = u.val[0x0002] && u.val[0x0002].v;
+    act = !!(ts && rk);
+  }
   if (act !== u.active) {
     u.active = act;
     const rk = u.val[0x0002] && u.val[0x0002].v;
@@ -205,6 +210,7 @@ let logSaveT = null;
 function scheduleLogSave() { if (logSaveT) return; logSaveT = setTimeout(() => { logSaveT = null; LS.set('sv.log', logLines.slice(-3000)); }, 3000); }
 
 /* ====================== GATT fronta ====================== */
+let lastRemoteNotify = 0;
 let device = null, server = null, connected = false, userDisconnect = false, simTimer = null, simulating = false;
 let chain = Promise.resolve();
 function gatt(fn) { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; }
@@ -237,13 +243,15 @@ function cycleList(u) {
   const due = (id, period) => !u.readAt[id] || now - u.readAt[id] >= period;
   const out = [];
   if (u.svc !== SVC_LOCAL && !u.active) {
-    if (S.mode === 'poll') for (const id of [0x0001, 0x0002]) if (u.chars.has(id)) out.push(id);
+    // prázdný slot: jen hlídat, zda se neobsadil
+    if (u.chars.has(0x0001) && due(0x0001, 2500)) out.push(0x0001);
+    if (u.chars.has(0x0002) && due(0x0002, 2500)) out.push(0x0002);
     return out;
   }
   for (const id of list) {
     if (!u.chars.has(id)) continue;
     const pr = D[id].pr;
-    if (pr === 'ts') { if (S.mode === 'poll' || due(id, 3000)) out.push(id); }
+    if (pr === 'ts') { if (S.mode === 'poll' || u.svc !== SVC_LOCAL || due(id, 3000)) out.push(id); }
     else if (pr === 'fast') out.push(id);
     else if (pr === 'slow') { if (due(id, S.slow * 1000)) out.push(id); }
     else if (pr === 'id') { if (due(id, 10000)) out.push(id); }
@@ -262,7 +270,7 @@ async function pump() {
       const now = Date.now();
       for (const u of units) {
         if (!u.present) continue;
-        const period = S.mode === 'poll' ? S.poll : (u.svc === SVC_LOCAL || u.active ? 3000 : 5000);
+        const period = S.mode === 'poll' ? S.poll : (u.svc === SVC_LOCAL || u.active ? 2000 : 2500);
         if (now - u.lastCycle >= period) u.dirty = true; // watchdog / periodické čtení
       }
       const todo = units.filter((u) => u.present && u.dirty).sort((a, b) => (a.svc === SVC_LOCAL ? -1 : b.svc === SVC_LOCAL ? 1 : dangerRank(a) - dangerRank(b)));
@@ -360,6 +368,12 @@ async function setNotify(u, id, on) {
     if (on) {
       if (!u.lsn[id]) {
         u.lsn[id] = (ev) => {
+          if (u.svc !== SVC_LOCAL && id === 0x0001) {
+            // TIMESTAMP okolního vlaku = podnět k načtení všech slotů (viz updateActive)
+            lastRemoteNotify = Date.now();
+            for (const x of units) if (x.svc !== SVC_LOCAL && x.present) { x.lastNotify = Date.now(); x.dirty = true; }
+            return;
+          }
           const dv = ev.target.value; store(u, id, new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(), 'notify');
           if (id === 0x0001) { u.lastNotify = Date.now(); u.dirty = true; updateActive(u); }
           if (curTab === 'tabDiag') render();
