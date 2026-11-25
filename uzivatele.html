@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SHERLOG RMJ – uživatelé</title>
+<style>
+:root{--bg:#eef1f6;--panel:#fff;--ink:#1b2333;--muted:#667085;--line:#d5dbe5;--accent:#1f3b8f;--red:#d62d20}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:20px;color:var(--accent)}
+fieldset{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:0 0 14px;padding:12px}
+legend{font-weight:700;padding:0 6px}
+table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid var(--line);padding:6px;text-align:left}
+input,select{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;width:100%;box-sizing:border-box}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;align-items:end}
+button{font:inherit;padding:9px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+button.sec{background:#fff;color:var(--accent)}button.del{background:#fff;color:var(--red);border-color:var(--red);padding:4px 10px}
+.hint{color:var(--muted);font-size:13px}.err{color:var(--red)}
+</style>
+</head>
+<body>
+<main>
+<h1>SHERLOG RMJ – správa uživatelů</h1>
+<p class="hint">Nástroj pro admina. Načte aktuální <b>users.json</b>, umožní přidat / upravit / zablokovat uživatele a stáhnout nový users.json, který pak nahrajete do repozitáře na GitHub vedle index.html. Hesla se nikam neodesílají – v souboru je jen jejich otisk (PBKDF2-SHA256, 100 000 iterací, sůl).</p>
+
+<fieldset><legend>Uživatelé</legend>
+  <div style="overflow-x:auto"><table id="tbl"></table></div>
+  <p class="hint" id="src"></p>
+  <button class="sec" onclick="document.getElementById('file').click()">Načíst users.json ze souboru…</button>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</fieldset>
+
+<fieldset><legend>Přidat uživatele / změnit heslo</legend>
+  <div class="grid">
+    <label>Přihlašovací jméno<input id="nU" autocapitalize="none"></label>
+    <label>Celé jméno<input id="nN"></label>
+    <label>Role<select id="nR"><option value="driver">strojvedoucí</option><option value="admin">admin</option></select></label>
+    <label>Heslo (min. 6 znaků)<input id="nP" type="text" autocomplete="off"></label>
+    <button id="btnAdd">Uložit uživatele</button>
+  </div>
+  <p class="err" id="err"></p>
+  <p class="hint">Existující přihlašovací jméno = změna hesla / role. Po změně hesla se zapamatované přihlášení na zařízeních zruší, jakmile budou online.</p>
+</fieldset>
+
+<button id="btnSave">Stáhnout users.json</button>
+</main>
+<script>
+'use strict';
+let db = { version: 1, updated: '', users: [] };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const b2h = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+const h2b = (h) => Uint8Array.from(h.match(/../g) || [], (x) => parseInt(x, 16));
+async function pbkdf2(pass, saltHex, iter) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']);
+  return b2h(new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: h2b(saltHex), iterations: iter }, key, 256)));
+}
+function draw() {
+  $('tbl').innerHTML = '<tr><th>Jméno</th><th>Celé jméno</th><th>Role</th><th>Stav</th><th></th></tr>' + db.users.map((u, i) =>
+    `<tr><td><b>${esc(u.u)}</b></td><td>${esc(u.name)}</td><td>${u.role === 'admin' ? 'admin' : 'strojvedoucí'}</td>
+     <td><label><input type="checkbox" data-dis="${i}" ${u.disabled ? '' : 'checked'} style="width:auto"> aktivní</label></td>
+     <td><button class="del" data-del="${i}">Smazat</button></td></tr>`).join('');
+}
+$('tbl').onclick = (e) => {
+  const d = e.target.dataset;
+  if (d.del != null && confirm('Smazat uživatele ' + db.users[+d.del].u + '?')) { db.users.splice(+d.del, 1); draw(); }
+  if (d.dis != null) { db.users[+d.dis].disabled = !e.target.checked; }
+};
+$('btnAdd').onclick = async () => {
+  const u = $('nU').value.trim(), n = $('nN').value.trim(), r = $('nR').value, p = $('nP').value;
+  $('err').textContent = '';
+  if (!/^[A-Za-z0-9._-]{2,32}$/.test(u)) { $('err').textContent = 'Přihlašovací jméno: 2–32 znaků (písmena bez diakritiky, číslice, . _ -).'; return; }
+  if (p.length < 6) { $('err').textContent = 'Heslo musí mít alespoň 6 znaků.'; return; }
+  const salt = b2h(crypto.getRandomValues(new Uint8Array(16))), iter = 100000;
+  const rec = { u, name: n || u, role: r, salt, iter, hash: await pbkdf2(p, salt, iter) };
+  const i = db.users.findIndex((x) => x.u.toLowerCase() === u.toLowerCase());
+  if (i >= 0) db.users[i] = rec; else db.users.push(rec);
+  $('nU').value = $('nN').value = $('nP').value = '';
+  draw();
+};
+$('btnSave').onclick = () => {
+  if (!db.users.some((u) => u.role === 'admin' && !u.disabled)) { alert('V seznamu musí zůstat alespoň jeden aktivní admin.'); return; }
+  db.updated = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 1)], { type: 'application/json' }));
+  a.download = 'users.json'; a.click();
+};
+$('file').onchange = async (e) => { const f = e.target.files[0]; if (!f) return; db = JSON.parse(await f.text()); $('src').textContent = 'Načteno ze souboru ' + f.name; draw(); };
+fetch('users.json?t=' + Date.now(), { cache: 'no-store' }).then((r) => r.json()).then((j) => { db = j; $('src').textContent = 'Načteno z webu (aktualizováno ' + (j.updated || '?') + ')'; draw(); })
+  .catch(() => { $('src').textContent = 'users.json na webu nenalezen – začínáte s prázdným seznamem.'; draw(); });
+</script>
+</body>
+</html>

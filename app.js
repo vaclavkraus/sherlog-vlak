@@ -2,10 +2,17 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.1.6';
+const APP_VERSION = '0.2.0';
 
 /* ====================== Nastavení ====================== */
-const DEFAULTS = { endian: 'le', mode: 'notify', poll: 1000, slow: 5, prefix: 'D3R', red: 60, yellow: 180, sound: '1', theme: 'light' };
+const DEFAULTS = {
+  endian: 'le', mode: 'notify', poll: 1000, slow: 5, prefix: 'D3R', red: 60, yellow: 180, sound: '1', theme: 'light',
+  // vyvolání alertu (jako v původní aplikaci + čas do střetu a SOS)
+  alDist: true, alDistM: 250, alBit: true, alCrash: true, alSos: true, crew: 'CETA',
+  // diagnostika a karty hlavního panelu
+  dDec: true, dHex: true, dBin: false, cWatch: true, cTrains: true, cUser: true, cDev: true, cLog: true,
+  autologin: true,
+};
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
@@ -35,6 +42,22 @@ function uintToBytes(v, n) {
 }
 const int32 = (b) => { let v = uintBytes(b); if (v >= 2 ** 31) v -= 2 ** 32; return v; };
 const ascii = (b) => { if (b.every((x) => x === 0)) return null; return String.fromCharCode(...b).replace(/\0/g, '').trim() || null; };
+const hexStr = (b) => Array.from(b, (x) => x.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+/** Rádiový kód / traťový úsek: 6 znaků ASCII, platné A–Z a 0–9 (např. VLAK01, NAKLAD).
+ *  Původní aplikace bajty zobrazovala jako text UTF-8 → nečitelné znaky „���[“.
+ *  Zde: nuly a mezery na okrajích se odříznou, platný kód se zobrazí velkými písmeny,
+ *  neplatné bajty se nezobrazí jako „rozsypaný čaj“, ale jako HEX s upozorněním. */
+function radioCode(b, emptyText) {
+  if (!b || !b.length || b.every((x) => x === 0 || x === 0x20 || x === 0xff)) return { v: null, ok: true, t: emptyText };
+  let a = Array.from(b);
+  while (a.length && (a[a.length - 1] === 0 || a[a.length - 1] === 0x20)) a.pop();
+  while (a.length && (a[0] === 0 || a[0] === 0x20)) a.shift();
+  const s = String.fromCharCode(...a);
+  if (/^[A-Za-z0-9]+$/.test(s)) { const v = s.toUpperCase(); return { v, ok: true, t: v }; }
+  if (/^[\x20-\x7e]+$/.test(s)) return { v: s, ok: false, t: s + ' (nestandardní znaky)' };
+  const h = hexStr(b);
+  return { v: 'HEX ' + h.replace(/ /g, ''), ok: false, t: 'neplatný kód – HEX ' + h };
+}
 const bcdDigits = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
 const bit = (v, i) => Math.floor(v / 2 ** i) % 2 === 1;
 const bits = (v, from, len) => Math.floor(v / 2 ** from) % 2 ** len;
@@ -91,10 +114,10 @@ const STATUS_BITS = { 0: 'Na trati', 1: 'Semafor ZELENÁ', 2: 'Není kalibrace',
 const D = {};
 function def(id, n, l, pr, dec) { D[id] = { id, n, l, pr, dec }; }
 def(0x0001, 'TIMESTAMP', 'Časová značka', 'ts', (b) => { const v = uintBytes(b); return { v, t: String(v) + (v > 1e9 ? ' (≈ ' + gpsToDate(v) + ')' : '') }; });
-def(0x0002, 'RADKOD', 'Rádiový kód', 'id', (b) => { const v = ascii(b); return { v, t: v || '—' }; });
+def(0x0002, 'RADKOD', 'Rádiový kód', 'id', (b) => radioCode(b, 'nepřiřazen'));
 def(0x0003, 'VLAKCISLO', 'Číslo vlaku', 'id', (b) => { const v = uintBytes(b); return { v: v || null, t: v ? String(v) : '—' }; });
 def(0x0004, 'TELEFON', 'Telefon strojvůdce', 'id', (b) => { const d = bcdDigits(b); const v = /^0+$/.test(d) ? null : d.replace(/^0+/, ''); return { v, t: fmtPhone(v) }; });
-def(0x0005, 'TU', 'Traťový úsek', 'slow', (b) => { const v = ascii(b); return { v, t: v || '—' }; });
+def(0x0005, 'TU', 'Traťový úsek', 'slow', (b) => radioCode(b, '—'));
 def(0x0006, 'RX_RSSI', 'RSSI zprávy', 'slow', (b) => { const s = b[0] > 127 ? b[0] - 256 : b[0]; const v = s === -128 ? null : s - 32; return { v, t: v == null ? '—' : v + ' dBm' }; });
 def(0x0007, 'RX_QVAL', 'Kvalita zprávy', 'slow', (b) => { const v = uintBytes(b); const ok = bit(v, 15); return { v, ok, t: (ok ? 'OK' : 'CHYBNÁ') + ` LQI ${bits(v, 8, 6)} PQT ${bits(v, 4, 4)} SYNC ${bits(v, 0, 4)}` }; });
 def(0x0008, 'RX_FLAGS', 'Příznaky', 'fast', (b) => { const v = uintBytes(b); const f = decodeFlags(v); return { v, f, t: '0x' + v.toString(16).toUpperCase().padStart(8, '0') + ' ' + f.set.map((i) => FLAG_NAMES[i][0]).join(' ') }; });
@@ -328,16 +351,28 @@ async function discoverUnit(u) {
 }
 
 async function subscribeUnit(u) {
-  for (const id of u.svc === SVC_LOCAL ? [0x0001, 0x0003, 0x0004, 0x0031] : [0x0001]) {
-    const ch = u.chars.get(id); if (!ch || !(ch.properties.notify || ch.properties.indicate)) continue;
-    try {
-      ch.addEventListener('characteristicvaluechanged', (ev) => {
-        const dv = ev.target.value; store(u, id, new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(), 'notify');
-        if (id === 0x0001) { u.lastNotify = Date.now(); u.dirty = true; updateActive(u); }
-      });
-      await gatt(() => ch.startNotifications());
-    } catch (e) { log(`Notifikace ${hex4(u.svc)}/${hex4(id)} nelze zapnout: ${errText(e)}`); }
-  }
+  for (const id of u.svc === SVC_LOCAL ? [0x0001, 0x0003, 0x0004, 0x0031] : [0x0001]) await setNotify(u, id, true);
+}
+async function setNotify(u, id, on) {
+  const ch = u.chars.get(id); if (!ch || !(ch.properties.notify || ch.properties.indicate)) return;
+  u.notif = u.notif || new Set(); u.lsn = u.lsn || {};
+  try {
+    if (on) {
+      if (!u.lsn[id]) {
+        u.lsn[id] = (ev) => {
+          const dv = ev.target.value; store(u, id, new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength).slice(), 'notify');
+          if (id === 0x0001) { u.lastNotify = Date.now(); u.dirty = true; updateActive(u); }
+          if (curTab === 'tabDiag') render();
+        };
+        ch.addEventListener('characteristicvaluechanged', u.lsn[id]);
+      }
+      await gatt(() => ch.startNotifications()); u.notif.add(id);
+    } else {
+      await gatt(() => ch.stopNotifications()); u.notif.delete(id);
+      if (u.lsn[id]) { ch.removeEventListener('characteristicvaluechanged', u.lsn[id]); delete u.lsn[id]; }
+    }
+    log(`Notifikace ${hex4(u.svc)}/${hex4(id)} ${on ? 'zapnuta' : 'vypnuta'}`);
+  } catch (e) { log(`Notifikace ${hex4(u.svc)}/${hex4(id)} nelze ${on ? 'zapnout' : 'vypnout'}: ${errText(e)}`); }
 }
 
 /* Služby okolních vlaků mohou vznikat a zanikat za běhu (vlak se objeví / zmizí).
@@ -355,9 +390,9 @@ async function writeIdentity() {
   const vlak = parseInt(input.vlak, 10) || 0;
   if (local.chars.has(0x0003)) await writeChar(local, 0x0003, uintToBytes(vlak, 3));
   if (local.chars.has(0x0004)) await writeChar(local, 0x0004, phoneToBcd(input.telefon));
-  log(`Přihlášení: kontakt "${input.kontakt}", vlak ${vlak}, telefon ${fmtPhone(phoneDigits(input.telefon))}`);
+  log(`Zápis identifikace: uživatel ${user ? user.u : '?'}, kontakt "${input.kontakt}", vlak ${vlak || '—'}, telefon ${fmtPhone(phoneDigits(input.telefon))}`);
 }
-function phoneDigits(s) { let d = String(s || '').replace(/\D/g, ''); if (d.startsWith('00')) d = d.slice(2); if (d.length === 9) d = '420' + d; return d; }
+function phoneDigits(s) { let d = String(s || '').replace(/\D/g, ''); if (!d) return ''; if (d.startsWith('00')) d = d.slice(2); if (d.length === 9) d = '420' + d; return d; }
 function phoneToBcd(s) {
   const d = phoneDigits(s).padStart(12, '0').slice(-12);
   const out = new Uint8Array(6);
@@ -387,8 +422,8 @@ async function disconnect() {
   try { if (device && device.gatt.connected) device.gatt.disconnect(); } catch (e) { /* ignore */ }
   setConn('', 'Odpojeno');
   banner('');
-  stopAlarm();
-  showScreen('scrInput');
+  stopAlarm(); closeAlert();
+  showScreen('scrScan');
 }
 
 /* ====================== SOS ====================== */
@@ -437,7 +472,7 @@ async function keepAwake() { try { if ('wakeLock' in navigator && !wakeLock) { w
 /* ====================== UI ====================== */
 const $ = (id) => document.getElementById(id);
 let curScreen = 'scrInput', prevScreen = 'scrInput', curTab = 'tabPrehled';
-const TITLES = { scrInput: 'Zadání vstupních dat', scrScan: 'Vyhledání zařízení', scrMain: 'Hlavní panel', scrSettings: 'Nastavení' };
+const TITLES = { scrLogin: 'Přihlášení', scrInput: 'Zadání vstupních dat', scrScan: 'Vyhledání zařízení', scrMain: 'Hlavní panel', scrSettings: 'Nastavení' };
 function showScreen(id) {
   if (id !== 'scrSettings') prevScreen = id;
   curScreen = id;
@@ -447,6 +482,9 @@ function showScreen(id) {
   $('bottombar').classList.toggle('active', inMain);
   $('btnDisconnect').hidden = !inMain;
   $('btnMute').hidden = !inMain;
+  $('btnSettings').hidden = !user || id === 'scrSettings';
+  $('btnLogout').hidden = !user;
+  $('btnInputBack').hidden = !(connected || simulating);
   if (inMain) { keepAwake(); render(); }
   renderSummaries();
 }
@@ -456,8 +494,9 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': 
 
 function renderSummaries() {
   const vlak = input.vlak || '—';
-  const html = `<div><b>${esc(input.kontakt || '—')}</b></div><div>Tel.: ${esc(fmtPhone(phoneDigits(input.telefon)))}</div><div>Vlak: ${esc(vlak)}</div>`;
-  $('sumScan').innerHTML = html; $('sumMain').innerHTML = html;
+  const html = `<div><b>${esc(input.kontakt || '—')}</b></div><div>Tel.: ${esc(fmtPhone(phoneDigits(input.telefon)))}</div><div>Vlak: ${esc(vlak)}</div>`
+    + (user ? `<div class="hint">Přihlášen: ${esc(user.name || user.u)} (${user.role === 'admin' ? 'admin' : 'strojvedoucí'})</div>` : '');
+  $('sumScan').innerHTML = html; $('sumMain').innerHTML = html; $('sumUser').innerHTML = html;
   const name = simulating ? 'SIMULACE' : device ? device.name || '(bez názvu)' : '—';
   const st = $('connDot').title || '—';
   $('sumDev').innerHTML = `<div><b>${esc(name)}</b></div><div class="hint">${esc(device && !simulating ? device.id : '')}</div><div>${esc(st)}</div>`;
@@ -495,7 +534,10 @@ function doRender() {
   const localFlags = V(local, 0x0031).v || 0;
   const sosLocal = bit(localFlags, 12);
   if (sosRemote.length) level = 2;
+  const al = evalAlerts(remotes);
+  if (al.some((a) => !a.ack)) level = 2;
   setAlarm(level);
+  renderAlertCard(al);
 
   // nejbližší
   let best = null;
@@ -504,7 +546,7 @@ function doRender() {
   let minC = null; for (const u of remotes) { const c = V(u, 0x0016); if (c.v && !c.away && (minC == null || c.v < minC)) minC = c.v; }
   $('kCrash').textContent = minC == null ? '—' : fmtDur(minC);
   $('kSos').innerHTML = sosLocal ? '<span class="chip red">VLASTNÍ SOS</span>' : sosRemote.length ? '<span class="chip red">SOS: ' + sosRemote.map((u) => esc(trainName(u))).join(', ') + '</span>' : '✕';
-  $('kAlert').innerHTML = level === 2 ? '<span class="chip red">ČERVENÁ</span>' : level === 1 ? '<span class="chip yellow">ŽLUTÁ</span>' : '✕';
+  $('kAlert').innerHTML = al.length ? '<span class="chip red">' + al.length + '× ALERT</span>' : level === 2 ? '<span class="chip red">ČERVENÁ</span>' : level === 1 ? '<span class="chip yellow">ŽLUTÁ</span>' : '✕';
   $('btnSos').classList.toggle('on', sosLocal);
 
   // vlastní příznaky
@@ -532,8 +574,88 @@ function doRender() {
   const la = V(local, 0x002b).v, lo = V(local, 0x002c).v;
   if (la != null && lo != null) $('localDl').innerHTML += `<dt>Mapa</dt><dd><a href="https://mapy.cz/zakladni?x=${lo}&y=${la}&z=16&source=coor&id=${lo}%2C${la}" target="_blank" rel="noopener">otevřít v Mapy.cz</a></dd>`;
 
+  for (const [k, id] of [['cWatch', 'cardWatch'], ['cTrains', 'cardTrains'], ['cUser', 'cardUser'], ['cDev', 'cardDev'], ['cLog', 'cardLog']]) $(id).hidden = !S[k];
+  if (S.cLog) renderLogCard();
   if (curTab === 'tabRadar') drawRadar(remotes);
   if (curTab === 'tabDiag') renderDiag();
+}
+
+/* ====================== Alert (blížící se vlak / četa) ====================== */
+const crewPrefixes = () => String(S.crew || '').split(/[,; ]+/).map((x) => x.trim().toUpperCase()).filter(Boolean);
+function isCrew(u) { const rk = u.val[0x0002] && u.val[0x0002].ok && u.val[0x0002].v; return !!rk && crewPrefixes().some((p) => rk.startsWith(p)); }
+const alertAck = new Map(); // svc → true (potvrzeno zavřením okna)
+let alertList = [], alertOpen = false, alertIdx = 0;
+function alertReasons(u) {
+  const V = (id) => u.val[id] || {};
+  const r = []; let red = false;
+  const fl = V(0x0008).v;
+  const d = V(0x0015).v || V(0x0014).v;
+  const c = V(0x0016);
+  if (S.alSos && fl != null && bit(fl, 12)) { r.push('SOS vyhlášené touto jednotkou'); red = true; }
+  if (S.alSos && fl != null && bit(fl, 5)) { r.push('Nehoda / náraz hlášený jednotkou'); red = true; }
+  if (S.alBit && fl != null && bit(fl, 30)) { r.push('Jednotka hlásí poplach – blízká jednotka (PBJ)'); red = true; }
+  if (S.alCrash && c.v && !c.away && c.v <= S.red) { r.push('Čas do možného střetu ' + fmtDur(c.v)); red = true; }
+  if (S.alDist && d && d < S.alDistM) r.push('Vzdálenost ' + fmtDist(d) + ' je menší než nastavených ' + S.alDistM + ' m');
+  return { r, red };
+}
+function evalAlerts(remotes) {
+  const list = [];
+  for (const u of remotes) { const a = alertReasons(u); if (a.r.length) list.push({ u, svc: u.svc, ...a, ack: alertAck.has(u.svc) }); }
+  // jednotka, která z alertu vypadla, při dalším vstupu alert znovu vyvolá
+  for (const svc of [...alertAck.keys()]) if (!list.some((a) => a.svc === svc)) alertAck.delete(svc);
+  for (const a of list) if (!alertList.some((b) => b.svc === a.svc)) log(`ALERT ${trainName(a.u)} (${hex4(a.svc)}): ${a.r.join('; ')}`);
+  list.sort((a, b) => (b.red - a.red) || (dangerRank(a.u) - dangerRank(b.u)));
+  alertList = list;
+  if (list.some((a) => !a.ack) && !alertOpen) { const i = list.findIndex((a) => !a.ack); openAlert(i); }
+  if (alertOpen) renderAlertOv();
+  return list;
+}
+function renderAlertCard(list) {
+  $('cardAlert').hidden = !list.length;
+  $('alertList').innerHTML = list.map((a, i) => `<div class="al-row" data-i="${i}"><img src="${isCrew(a.u) ? 'ikona-ceta.png' : 'ikona-vlak.png'}" alt=""><div style="flex:1"><b>${esc(isCrew(a.u) ? 'Četa ' : '')}${esc(trainName(a.u))}</b> <span class="chip ${a.red ? 'red' : 'yellow'}">${esc(fmtDist(a.u.val[0x0015] && a.u.val[0x0015].v || a.u.val[0x0014] && a.u.val[0x0014].v))}</span><div class="hint">${esc(a.r[0])}</div></div></div>`).join('');
+}
+function openAlert(i) { alertOpen = true; alertIdx = Math.max(0, i); $('alertOv').classList.add('show'); renderAlertOv(); }
+function closeAlert() { for (const a of alertList) alertAck.set(a.svc, true); alertOpen = false; $('alertOv').classList.remove('show'); render(); }
+function renderAlertOv() {
+  if (!alertList.length) { alertOpen = false; $('alertOv').classList.remove('show'); return; }
+  if (alertIdx >= alertList.length) alertIdx = alertList.length - 1;
+  const a = alertList[alertIdx], u = a.u, V = (id) => u.val[id] || {};
+  const crew = isCrew(u);
+  $('alertBox').className = 'alert-box' + (a.red ? '' : ' yellow');
+  $('alIco').src = crew ? 'ikona-ceta.png' : 'ikona-vlak.png';
+  const sos = V(0x0008).v != null && bit(V(0x0008).v, 12);
+  $('alTitle').textContent = sos ? 'SOS – ' + (crew ? 'pracovní četa' : 'vlak') : crew ? 'Pozor, pracovní četa!' : 'Blíží se vlak!';
+  $('alSub').textContent = trainName(u) + (V(0x0002).v ? ' · rádiový kód ' + V(0x0002).t : '');
+  const d1 = V(0x0015).v, d2 = V(0x0014).v;
+  $('alDist').textContent = fmtDist(d1 || d2) + (d1 ? '' : d2 ? ' (vzdušně)' : '');
+  $('alReason').innerHTML = a.r.map(esc).join('<br>');
+  const rows = [
+    ['Vzdálenost po trati', V(0x0015).t], ['Vzdálenost vzdušná', V(0x0014).t], ['Čas do možného střetu', V(0x0016).t],
+    ['Rychlost', V(0x000f).v != null ? V(0x000f).v + ' km/h' : '—'], ['Směr (azimut)', V(0x0013).v != null ? V(0x0013).v + '°' : '—'],
+    ['Číslo vlaku', V(0x0003).t], ['Rádiový kód', V(0x0002).t], ['Traťový úsek', V(0x0005).t],
+    ['Telefon', V(0x0004).v ? `<a href="tel:+${esc(V(0x0004).v)}">${esc(V(0x0004).t)}</a>` : '—', true], ['Poslední příjem', V(0x0012).t],
+  ];
+  $('alDl').innerHTML = rows.map(([k, v, html]) => `<dt>${esc(k)}</dt><dd>${html ? v : esc(v || '—')}</dd>`).join('');
+  $('alPos').textContent = alertList.length > 1 ? `${alertIdx + 1} / ${alertList.length}` : '';
+  $('alPrev').hidden = $('alNext').hidden = alertList.length < 2;
+}
+
+/* ====================== Karta Log ====================== */
+const logFileName = () => `sherlog_${(user && user.u) || 'log'}_${today()}.log`;
+function renderLogCard() {
+  $('logName').textContent = logFileName();
+  const el = $('logMini'); const txt = logLines.slice(-50).join('\n');
+  if (el.textContent !== txt) { el.textContent = txt; el.scrollTop = el.scrollHeight; }
+}
+async function sendLog() {
+  const name = logFileName(), text = logLines.join('\r\n');
+  try {
+    const f = new File([text], name, { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name, text: 'Log aplikace SHERLOG RMJ' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  download(name, text, 'text/plain');
+  const body = 'Log aplikace SHERLOG RMJ – soubor ' + name + ' byl uložen do Stažených souborů, přiložte jej prosím.\n\nPosledních 50 řádků:\n' + logLines.slice(-50).join('\n');
+  location.href = 'mailto:?subject=' + encodeURIComponent('SHERLOG RMJ log ' + name) + '&body=' + encodeURIComponent(body.slice(0, 1800));
 }
 function trainName(u) { const v = u.val; return (v[0x0003] && v[0x0003].v) ? 'Vlak ' + v[0x0003].v : (v[0x0002] && v[0x0002].v) || 'Slot ' + hex4(u.svc); }
 function trainCard(u) {
@@ -556,7 +678,7 @@ function trainCard(u) {
   const az = V(0x0013);
   const arrow = az.v != null ? `<span style="display:inline-block;transform:rotate(${az.v}deg)">↑</span>` : '';
   return `<div class="train ${col} ${stale ? 'stale' : ''}">
-    <div class="top"><div><div class="name">${esc(trainName(u))}</div><div class="hint">${esc((V(0x0002).v || '') + (V(0x0005).v ? ' · TÚ ' + V(0x0005).v : '') + ' · ' + hex4(u.svc))}</div></div>
+    <div class="top"><div><div class="name"><img src="${isCrew(u) ? 'ikona-ceta.png' : 'ikona-vlak.png'}" alt="" style="width:26px;height:26px;vertical-align:-6px;background:#fff;border-radius:50%;padding:2px;margin-right:4px">${esc(isCrew(u) ? 'Četa ' : '')}${esc(trainName(u))}</div><div class="hint">${esc((V(0x0002).v || '') + (V(0x0005).v ? ' · TÚ ' + V(0x0005).v : '') + ' · ' + hex4(u.svc))}</div></div>
     <div style="text-align:right"><div class="dist">${esc(fmtDist(d1 || d2))}</div><div class="hint">${d1 ? 'po koleji' : d2 ? 'vzdušně' : ''}${d1 && d2 ? ' · vzduš. ' + esc(fmtDist(d2)) : ''}</div></div></div>
     <div class="grid3">
       <div><span>Čas do střetu</span><b>${esc(V(0x0016).t || '—')}</b></div>
@@ -566,7 +688,7 @@ function trainCard(u) {
       <div><span>RSSI</span><b>${esc(V(0x0006).t || '—')}</b></div>
       <div><span>Napájení / aku</span><b>${esc((V(0x0009).v != null ? V(0x0009).v.toFixed(1) + ' V' : '—') + ' / ' + (V(0x000a).v != null ? V(0x000a).v.toFixed(1) + ' V' : '—'))}</b></div>
     </div>
-    ${V(0x0004).v ? `<div class="hint" style="margin-top:4px">Strojvůdce: <a href="tel:+${esc(V(0x0004).v)}">${esc(V(0x0004).t)}</a></div>` : ''}
+    ${V(0x0004).v ? `<div class="hint" style="margin-top:4px">${isCrew(u) ? 'Kontakt' : 'Strojvůdce'}: <a href="tel:+${esc(V(0x0004).v)}">${esc(V(0x0004).t)}</a></div>` : ''}
     <div class="chips">${chips.map(([t, c]) => `<span class="chip ${c}">${esc(t)}</span>`).join('')}</div>
   </div>`;
 }
@@ -600,21 +722,44 @@ function drawRadar(remotes) {
   if (!pts.length) { ctx.fillStyle = muted; ctx.font = '24px system-ui'; ctx.fillText('Žádné vlaky s platným azimutem', c, c + R / 2); }
 }
 
+let diagSvc = SVC_LOCAL;
+function binStr(b) { return Array.from(b, (x) => x.toString(2).padStart(8, '0')).join(' '); }
 function renderDiag() {
-  const sel = $('diagUnit');
-  const opts = units.filter((u) => u.present).map((u) => `<option value="${u.svc}">${hex4(u.svc)} ${u.svc === SVC_LOCAL ? 'Local' : 'Vlak ' + (u.svc - SVC_LOCAL) + (u.active ? ' – ' + trainName(u) : ' (prázdný)')}</option>`).join('');
-  const keep = sel.value;
-  if (sel.dataset.sig !== opts) { sel.innerHTML = opts; sel.dataset.sig = opts; if (keep) sel.value = keep; }
-  const u = unitBy(+sel.value); if (!u) { $('diagTable').innerHTML = ''; return; }
+  const sig = units.map((u) => u.svc + ':' + u.present + ':' + u.active).join(',') + diagSvc;
+  const sel = $('svcSel');
+  if (sel.dataset.sig !== sig) {
+    sel.dataset.sig = sig;
+    sel.innerHTML = units.map((u) => `<button class="btn secondary ${u.svc === diagSvc ? 'sel' : ''} ${u.present ? '' : 'off'}" data-svc="${u.svc}">${hex4(u.svc)}${u.svc === SVC_LOCAL ? ' vlastní' : u.active ? ' ●' : ''}</button>`).join('');
+  }
+  const u = unitBy(diagSvc); const list = $('diagList');
+  if (!u || !u.present) { list.innerHTML = '<p class="hint">Služba ' + hex4(diagSvc) + ' v zařízení není (slot bez vlaku).</p>'; list.dataset.sig = ''; return; }
   const ids = [...new Set([...(u.svc === SVC_LOCAL ? LOCAL_CHARS : REMOTE_CHARS), ...u.chars.keys()])].sort((a, b) => a - b);
+  const notif = u.notif || new Set();
+  const rsig = u.svc + '|' + ids.join(',') + '|' + [...notif].join(',') + '|' + simulating;
+  if (list.dataset.sig !== rsig) {
+    list.dataset.sig = rsig;
+    list.innerHTML = ids.map((id) => {
+      const ch = u.chars.get(id); const p = ch ? ch.properties : null;
+      const prop = p ? [p.read && 'READ', (p.write || p.writeWithoutResponse) && 'WRITE', p.notify && 'NOTIFY', p.indicate && 'INDICATE'].filter(Boolean).join(', ') : simulating ? 'simulace' : 'nenalezena';
+      const canN = p && (p.notify || p.indicate);
+      return `<div class="dg-row" data-id="${id}"><div><div class="nm">${esc(D[id] ? D[id].l : '?')} <small>${hex4(id)} · ${esc(D[id] ? D[id].n : '')} · ${prop}</small></div><div class="val" id="dgv${id}"></div><div class="num" id="dgn${id}"></div></div>
+        <div class="acts">${p && p.read ? `<button data-act="read" title="Načíst">⟳</button>` : ''}${canN ? `<button data-act="notif" class="${notif.has(id) ? 'on' : ''}" title="Notifikace">🔔</button>` : ''}</div></div>`;
+    }).join('');
+  }
   const now = Date.now();
-  $('diagTable').innerHTML = '<tr><th>UUID</th><th>Název</th><th>Prop</th><th>HEX</th><th>Hodnota</th><th>Stáří</th></tr>' + ids.map((id) => {
-    const ch = u.chars.get(id); const p = ch ? ch.properties : null;
-    const prop = p ? (p.read ? 'R' : '') + (p.write || p.writeWithoutResponse ? 'W' : '') + (p.notify ? 'N' : '') + (p.indicate ? 'I' : '') : simulating ? 'sim' : '✕';
-    const raw = u.raw[id]; const hex = raw ? Array.from(raw, (x) => x.toString(16).toUpperCase().padStart(2, '0')).join(' ') : '';
-    const age = u.readAt[id] ? ((now - u.readAt[id]) / 1000).toFixed(1) + ' s' : '';
-    return `<tr><td>${hex4(id)}</td><td>${esc(D[id] ? D[id].n : '?')}</td><td>${prop}</td><td>${hex}</td><td>${esc(u.val[id] ? u.val[id].t : '')}</td><td>${age}</td></tr>`;
-  }).join('');
+  for (const id of ids) {
+    const vEl = $('dgv' + id), nEl = $('dgn' + id); if (!vEl) continue;
+    const raw = u.raw[id];
+    const age = u.readAt[id] ? ' · před ' + ((now - u.readAt[id]) / 1000).toFixed(0) + ' s' : '';
+    vEl.textContent = (u.val[id] ? u.val[id].t : 'nenačteno') + age;
+    const parts = [];
+    if (raw && raw.length) {
+      if (S.dDec) parts.push('DEC ' + (raw.length <= 6 ? uintBytes(raw) : Array.from(raw).join(' ')));
+      if (S.dHex) parts.push('HEX ' + hexStr(raw));
+      if (S.dBin) parts.push('BIN ' + binStr(raw));
+    }
+    nEl.textContent = parts.join('  ·  ');
+  }
 }
 let logRenderT = null;
 function renderLogSoon() { if (logRenderT) return; logRenderT = setTimeout(() => { logRenderT = null; const el = $('logView'); const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 20; el.textContent = logLines.slice(-400).join('\n'); if (atEnd) el.scrollTop = el.scrollHeight; }, 300); }
@@ -661,6 +806,7 @@ function startSim() {
     { svc: 0x5401, rk: 'VLAK01', no: 17101, tel: '602123456', d0: 4200, v: -12, az: 8 },   // přibližuje se
     { svc: 0x5402, rk: 'NAKLAD', no: 61330, tel: '', d0: 2600, v: 6, az: 172 },          // vzdaluje se
     { svc: 0x5403, rk: 'VLAKXY', no: 0, tel: '731000222', d0: 9800, v: 0, az: 245 },      // stojí
+    { svc: 0x5404, rk: 'CETA07', no: 0, tel: '777555333', d0: 320, v: -1.5, az: 355 },     // pracovní četa (do 250 m za ~45 s)
   ];
   put(local, 0x0002, 'VLAK00'); put(local, 0x0003, parseInt(input.vlak, 10) || 0); put(local, 0x0004, input.telefon);
   put(local, 0x0031, 2 ** 0); put(local, 0x0005, '1234R0');
@@ -671,7 +817,7 @@ function startSim() {
     let red = false, yellow = false;
     for (const tr of trains) {
       const u = unitBy(tr.svc);
-      let d = tr.d0 + tr.v * t; if (d < 150) { d = 150; } if (tr.v < 0 && d <= 150) tr.v = 0;
+      let d = tr.d0 + tr.v * t; const dmin = tr.rk.startsWith('CETA') ? 60 : 150; if (d < dmin) { d = dmin; tr.v = 0; }
       const tc = tr.v < 0 ? Math.round(d / -tr.v) : tr.v > 0 ? 65535 : 0;
       if (tr.v < 0 && tc <= S.red) red = true; else if (tr.v < 0 && tc <= S.yellow) yellow = true;
       put(u, 0x0002, tr.rk); u.lastNotify = Date.now(); put(u, 0x0001, gps); put(u, 0x0003, tr.no); put(u, 0x0004, tr.tel); put(u, 0x0005, '1234R' + (tr.svc - 0x5400));
@@ -679,6 +825,7 @@ function startSim() {
       put(u, 0x0007, 0x8000 | (5 << 8) | (2 << 4) | 1);
       let fl = 2 ** 0 + 2 ** 29 + (3 * 2 ** 19) + (5 * 2 ** 21) + (2 * 2 ** 16) + (tr.v ? 2 ** 14 : 0);
       if (tr.svc === 0x5403) fl += 2 ** 9; // nízké napětí aku
+      if (tr.v < 0 && tc && tc <= S.red) fl += 2 ** 30; // PBJ – poplach blízká jednotka
       put(u, 0x0008, fl);
       put(u, 0x0009, 160); put(u, 0x000a, tr.svc === 0x5403 ? 140 : 168);
       put(u, 0x000b, i32(Math.round((50.07 + tr.az / 10000) * 1e7))); put(u, 0x000c, i32(Math.round((12.95 + d / 1e6) * 1e7))); put(u, 0x000d, 4520);
@@ -710,10 +857,101 @@ function confirmDlg(text) {
 }
 
 /* ====================== Inicializace ====================== */
-function applyTheme() { document.documentElement.dataset.theme = S.theme; }
-function loadSettingsForm() { $('setEndian').value = S.endian; $('setMode').value = S.mode; $('setPoll').value = S.poll; $('setSlow').value = S.slow; $('setPrefix').value = S.prefix; $('setRed').value = S.red; $('setYellow').value = S.yellow; $('setSound').value = S.sound; $('setTheme').value = S.theme; }
+function applyTheme() { document.documentElement.dataset.theme = S.theme; const b = $('btnTheme'); if (b) b.textContent = S.theme === 'dark' ? '☀' : '🌙'; }
+
+/* ====================== Uživatelé a přihlášení ======================
+ * Centrální seznam users.json (v repozitáři vedle aplikace) – hesla jen jako PBKDF2-SHA256 hash se solí.
+ * Po prvním načtení se seznam uloží v zařízení, takže přihlášení funguje i offline.
+ * Úpravy seznamu: nástroj uzivatele.html → stáhnout users.json → nahrát na GitHub. */
+let user = null; // {u, name, role}
+let usersDb = LS.get('sv.users', null), usersFresh = false;
+const SESSION_DAYS = 30;
+const isAdmin = () => !!user && user.role === 'admin';
+const b2h = (b) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+const h2b = (h) => Uint8Array.from(h.match(/../g) || [], (x) => parseInt(x, 16));
+async function pbkdf2(pass, saltHex, iter) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']);
+  return b2h(new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: h2b(saltHex), iterations: iter }, key, 256)));
+}
+async function loadUsers() {
+  try {
+    const r = await fetch('users.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json(); if (!Array.isArray(j.users)) throw new Error('chybný formát');
+    usersDb = j; usersFresh = true; LS.set('sv.users', j);
+  } catch (e) { log('Seznam uživatelů nelze načíst ze sítě (' + errText(e) + ') – používám uložený'); }
+  return usersDb;
+}
+function saveSession(uu, remember) {
+  const sess = { u: uu.u, name: uu.name, role: uu.role, h: uu.h, t: Date.now() };
+  try { sessionStorage.setItem('sv.session', JSON.stringify(sess)); } catch (e) { /* ignore */ }
+  if (remember) LS.set('sv.session', sess);
+}
+function loadSession() {
+  let s = null;
+  try { s = JSON.parse(sessionStorage.getItem('sv.session') || 'null'); } catch (e) { /* ignore */ }
+  if (!s && S.autologin) s = LS.get('sv.session', null);
+  if (!s || Date.now() - s.t > SESSION_DAYS * 864e5) return null;
+  return s;
+}
+function findUser(name) { return usersDb && usersDb.users.find((x) => x.u.toLowerCase() === String(name).trim().toLowerCase()); }
+async function doLogin() {
+  const name = $('lgUser').value.trim(), pass = $('lgPass').value;
+  $('lgErr').textContent = '';
+  if (!name || !pass) { $('lgErr').textContent = 'Zadejte uživatele a heslo.'; return; }
+  if (!(window.crypto && crypto.subtle)) { $('lgErr').textContent = 'Přihlášení vyžaduje zabezpečené spojení (HTTPS).'; return; }
+  $('btnLogin').disabled = true;
+  try {
+    await loadUsers();
+    if (!usersDb) { $('lgErr').textContent = 'Seznam uživatelů není k dispozici – při prvním přihlášení musí být zařízení online.'; return; }
+    const uu = findUser(name);
+    const h = uu ? await pbkdf2(pass, uu.salt, uu.iter || 100000) : await pbkdf2(pass, '00', 1000);
+    if (!uu || uu.disabled || h !== uu.hash) { $('lgErr').textContent = 'Nesprávný uživatel nebo heslo.'; log('Neúspěšné přihlášení: ' + name); return; }
+    S.autologin = $('lgRemember').checked; LS.set('sv.settings', S);
+    onLoggedIn({ u: uu.u, name: uu.name, role: uu.role, h: uu.hash.slice(0, 16) });
+    saveSession(user, S.autologin);
+    $('lgPass').value = '';
+  } catch (e) { $('lgErr').textContent = 'Chyba přihlášení: ' + errText(e); }
+  finally { $('btnLogin').disabled = false; }
+}
+function onLoggedIn(sess) {
+  user = sess;
+  log(`Přihlášen uživatel ${user.u} (${user.role})`);
+  applyRole();
+  showScreen((connected || simulating) ? 'scrMain' : 'scrInput');
+}
+function applyRole() {
+  $('tabBtnDiag').hidden = !isAdmin();
+  if (!isAdmin() && curTab === 'tabDiag') document.querySelector('.tabs button[data-tab="tabPrehled"]').click();
+}
+/* Po online načtení seznamu ověří, že zapamatovaný uživatel stále existuje a nezměnil heslo. */
+async function verifySession() {
+  await loadUsers();
+  if (!user || !usersFresh) return;
+  const uu = findUser(user.u);
+  if (!uu || uu.disabled || uu.hash.slice(0, 16) !== user.h) { log('Zapamatované přihlášení už neplatí – nutné nové přihlášení'); logout(true); }
+  else if (uu.role !== user.role) { user.role = uu.role; saveSession(user, S.autologin); applyRole(); }
+}
+async function logout(silent) {
+  if (!silent && !(await confirmDlg('<b>Odhlásit?</b><p>' + ((connected || simulating) ? 'Spojení s jednotkou se ukončí.' : '') + '</p>'))) return;
+  if (connected || simulating) await disconnect();
+  log('Odhlášen uživatel ' + (user ? user.u : ''));
+  user = null;
+  try { sessionStorage.removeItem('sv.session'); localStorage.removeItem('sv.session'); } catch (e) { /* ignore */ }
+  $('lgRemember').checked = S.autologin;
+  showScreen('scrLogin');
+}
+const CHK = { setAlDist: 'alDist', setAlBit: 'alBit', setAlCrash: 'alCrash', setAlSos: 'alSos', setDDec: 'dDec', setDHex: 'dHex', setDBin: 'dBin', setCWatch: 'cWatch', setCTrains: 'cTrains', setCUser: 'cUser', setCDev: 'cDev', setCLog: 'cLog', setAutologin: 'autologin' };
+function loadSettingsForm() {
+  for (const [el, k] of Object.entries(CHK)) $(el).checked = !!S[k];
+  $('setAlDistM').value = S.alDistM; $('setCrew').value = S.crew;
+  document.querySelectorAll('.adminOnly').forEach((e) => { e.hidden = !isAdmin(); });
+  $('setEndian').value = S.endian; $('setMode').value = S.mode; $('setPoll').value = S.poll; $('setSlow').value = S.slow; $('setPrefix').value = S.prefix; $('setRed').value = S.red; $('setYellow').value = S.yellow; $('setSound').value = S.sound; $('setTheme').value = S.theme; }
 function saveSettingsForm() {
   S.endian = $('setEndian').value; S.mode = $('setMode').value; S.poll = Math.max(200, +$('setPoll').value || DEFAULTS.poll); S.slow = Math.max(1, +$('setSlow').value || DEFAULTS.slow);
+  for (const [el, k] of Object.entries(CHK)) S[k] = $(el).checked;
+  S.alDistM = Math.max(10, +$('setAlDistM').value || DEFAULTS.alDistM); S.crew = $('setCrew').value.trim().toUpperCase();
+  if (!S.autologin) { try { localStorage.removeItem('sv.session'); } catch (e) { /* ignore */ } } else if (user) saveSession(user, true);
   S.prefix = $('setPrefix').value.trim(); S.red = +$('setRed').value || 0; S.yellow = +$('setYellow').value || 0; S.sound = $('setSound').value; S.theme = $('setTheme').value;
   LS.set('sv.settings', S); applyTheme(); log('Nastavení uloženo: ' + JSON.stringify(S));
 }
@@ -728,16 +966,45 @@ function init() {
     const k = $('inKontakt').value.trim(), t = $('inTelefon').value.trim(), v = $('inVlak').value.trim();
     const d = phoneDigits(t);
     let err = '';
-    if (!/^\d{1,8}$/.test(v) || +v < 1 || +v > 16777215) err = 'Zadejte číslo vlaku 1–999999 (max. 16777215).';
+    if (v && (!/^\d{1,8}$/.test(v) || +v < 1 || +v > 16777215)) err = 'Číslo vlaku: 1–16777215 (nebo nechte prázdné).';
     else if (t && d.length !== 12) err = 'Telefon zadejte jako 9 číslic (CZ) nebo s předvolbou, celkem 12 číslic.';
     $('inErr').textContent = err;
     if (err) return;
-    Object.assign(input, { kontakt: k, telefon: t, vlak: String(+v) });
+    Object.assign(input, { kontakt: k, telefon: t, vlak: v ? String(+v) : '' });
     LS.set('sv.input', input);
     ensureAudio();
-    log(`Zadání: kontakt "${k}", vlak ${v}, telefon ${fmtPhone(d)}`);
-    showScreen('scrScan');
+    log(`Zadání: kontakt "${k}", vlak ${v || '—'}, telefon ${fmtPhone(d)}`);
+    if (connected || simulating) {
+      // úprava za běhu → hned zapsat do jednotky
+      if (simulating) { const l = unitBy(SVC_LOCAL); store(l, 0x0003, uintToBytes(+v || 0, 3)); store(l, 0x0004, phoneToBcd(t)); }
+      else writeIdentity().then(() => banner('')).catch((e) => banner('Zápis selhal: ' + errText(e), 'red'));
+      showScreen('scrMain');
+    } else showScreen('scrScan');
   };
+  $('btnInputBack').onclick = () => showScreen('scrMain');
+  $('cardUser').onclick = () => { $('inKontakt').value = input.kontakt; $('inTelefon').value = input.telefon; $('inVlak').value = input.vlak; showScreen('scrInput'); };
+  $('btnLogin').onclick = doLogin;
+  $('lgPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+  $('lgRemember').checked = S.autologin;
+  $('btnLogout').onclick = () => logout(false);
+  $('btnTheme').onclick = () => { S.theme = S.theme === 'dark' ? 'light' : 'dark'; LS.set('sv.settings', S); applyTheme(); render(); };
+  $('alClose').onclick = closeAlert;
+  $('alPrev').onclick = () => { alertIdx = (alertIdx - 1 + alertList.length) % alertList.length; renderAlertOv(); };
+  $('alNext').onclick = () => { alertIdx = (alertIdx + 1) % alertList.length; renderAlertOv(); };
+  $('alertList').onclick = (e) => { const r = e.target.closest('.al-row'); if (r) openAlert(+r.dataset.i); };
+  $('btnLogSend').onclick = sendLog;
+  $('btnLogShow').onclick = () => { $('logOvName').textContent = logFileName(); $('logOvText').textContent = logLines.slice(-3000).join('\n'); $('logOv').classList.add('show'); const p = $('logOvText'); p.scrollTop = p.scrollHeight; };
+  $('btnLogOvClose').onclick = () => $('logOv').classList.remove('show');
+  $('btnLogDl2').onclick = () => download(logFileName(), logLines.join('\r\n'), 'text/plain');
+  $('svcSel').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; diagSvc = +b.dataset.svc; renderDiag(); };
+  $('diagList').onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const id = +b.closest('.dg-row').dataset.id, u = unitBy(diagSvc);
+    if (simulating || !connected) return;
+    if (b.dataset.act === 'read') { await readChar(u, id).catch(() => {}); renderDiag(); }
+    if (b.dataset.act === 'notif') { await setNotify(u, id, !(u.notif && u.notif.has(id))); renderDiag(); }
+  };
+  $('btnDiagAll').onclick = async () => { const u = unitBy(diagSvc); if (simulating || !connected || !u) return; for (const id of u.chars.keys()) { if (u.chars.get(id).properties.read) await readChar(u, id).catch(() => {}); } renderDiag(); };
   $('btnBackInput').onclick = () => showScreen('scrInput');
   $('btnScan').onclick = () => { ensureAudio(); scanAndConnect(); };
   $('btnSim').onclick = () => { ensureAudio(); startSim(); };
@@ -746,10 +1013,9 @@ function init() {
   $('btnDisconnect').onclick = async () => { if (await confirmDlg('<b>Odpojit?</b><p>Chcete se odpojit od ' + esc(simulating ? 'simulace' : (device && device.name) || 'jednotky') + '?</p>')) disconnect(); };
   $('btnMute').onclick = () => { muteUntil = Date.now() + 60000; $('btnMute').textContent = '🔕'; setTimeout(() => { $('btnMute').textContent = '🔔'; }, 60000); log('Alarm ztlumen na 60 s'); };
   $('btnRewrite').onclick = () => { if (simulating) return; writeIdentity().then(() => banner('')).catch((e) => banner('Zápis selhal: ' + errText(e), 'red')); };
-  $('btnLogDl').onclick = () => download(`${today()}.log`, logLines.join('\r\n'), 'text/plain');
+  $('btnLogDl').onclick = () => download(logFileName(), logLines.join('\r\n'), 'text/plain');
   $('btnCsvDl').onclick = () => download(`sherlog_${today()}.csv`, ['cas;slot;radkod;vlak;flags;status;lat;lon;rychlost_kmh;smer;dist1d_m;dist2d_m;crashtime_s;sat', ...csvRows.map((r) => r.join(';'))].join('\r\n'), 'text/csv');
   $('btnLogClear').onclick = async () => { if (await confirmDlg('Vymazat log?')) { logLines = []; csvRows = []; LS.set('sv.log', []); renderLogSoon(); } };
-  $('diagUnit').onchange = renderDiag;
   document.querySelectorAll('.tabs button').forEach((b) => {
     b.onclick = () => {
       curTab = b.dataset.tab;
@@ -787,8 +1053,9 @@ function init() {
   window.addEventListener('beforeunload', (e) => { LS.set('sv.log', logLines.slice(-3000)); if (connected) { e.preventDefault(); e.returnValue = ''; } });
   if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
   setInterval(() => { for (const u of units) updateActive(u); if (curScreen === 'scrMain') render(); }, 1000);
-  showScreen('scrInput');
+  const sess = loadSession();
+  if (sess) { onLoggedIn(sess); verifySession(); } else { showScreen('scrLogin'); loadUsers(); }
 }
 
 if (typeof document !== 'undefined') document.addEventListener('DOMContentLoaded', init);
-if (typeof module !== 'undefined') module.exports = { D, nonlinTime, phoneToBcd, uintToBytes, uintBytes, decodeFlags, S };
+if (typeof module !== 'undefined') module.exports = { D, radioCode, nonlinTime, phoneToBcd, uintToBytes, uintBytes, decodeFlags, S };

@@ -1,0 +1,22 @@
+{
+ "version": 1,
+ "updated": "2026-11-25",
+ "users": [
+  {
+   "u": "admin",
+   "name": "Správce",
+   "role": "admin",
+   "salt": "6eabf51bc382d81f60f0334d638ed9a3",
+   "iter": 100000,
+   "hash": "458dbb0230d59f41113c9d730212a23b8e6f058ccf2d51ab32581b3e507849cd"
+  },
+  {
+   "u": "strojvedouci",
+   "name": "Testovací strojvedoucí",
+   "role": "driver",
+   "salt": "7b987023744bdcb2d10a34e020a03891",
+   "iter": 100000,
+   "hash": "74ad056b0fc4a1ac99fd5ed02e534c2883ac6445c48e16a1c70b3d69cabadb72"
+  }
+ ]
+}

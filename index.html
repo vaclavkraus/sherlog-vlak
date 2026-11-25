@@ -97,6 +97,57 @@ dialog{border:0;border-radius:12px;padding:16px;max-width:340px;width:90%;backgr
 dialog::backdrop{background:rgba(0,0,0,.5)}
 .dlg-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
 .mute{font-size:13px}
+/* přihlášení */
+.login-logo{text-align:center;margin:18px 0 10px}
+.login-logo b{display:block;font-size:34px;letter-spacing:.04em;color:var(--head)}
+.login-logo span{font-size:13px;letter-spacing:.3em;color:var(--muted)}
+:root[data-theme="dark"] .login-logo b{color:var(--ink)}
+label.chk{display:flex;align-items:center;gap:10px;margin:10px 0;cursor:pointer}
+label.chk input{width:22px;height:22px;flex:0 0 auto}
+/* karty */
+.card-click{cursor:pointer}
+.card-click:active{filter:brightness(.97)}
+.edit-hint{font-size:12px;color:var(--muted)}
+.alertcard{border-color:var(--red);background:#fdecea}
+:root[data-theme="dark"] .alertcard{background:#3a1512}
+.alertcard legend{color:var(--red)}
+.al-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.al-row:last-child{border-bottom:0}
+.al-row img{width:40px;height:40px;background:#fff;border-radius:50%;padding:4px;flex:0 0 auto}
+.logmini{background:var(--chip);border-radius:8px;padding:6px 8px;font:10.5px/1.35 ui-monospace,Consolas,monospace;max-height:180px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+/* alert dialog */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:none;align-items:center;justify-content:center;padding:16px}
+.overlay.show{display:flex}
+.alert-box{background:var(--panel);color:var(--ink);border:6px solid var(--red);border-radius:18px;max-width:520px;width:100%;padding:18px 18px 14px;box-shadow:0 10px 40px rgba(0,0,0,.5);max-height:92vh;overflow:auto}
+.alert-box.yellow{border-color:var(--yellow)}
+.alert-head{display:flex;align-items:center;gap:14px}
+.alert-ico{width:96px;height:96px;border-radius:50%;background:#fff;border:5px solid var(--red);padding:10px;flex:0 0 auto;animation:pulse .8s infinite}
+.alert-box.yellow .alert-ico{border-color:var(--yellow)}
+.alert-title{font-size:24px;font-weight:800;color:var(--red);line-height:1.15}
+.alert-box.yellow .alert-title{color:#a87f00}
+.alert-sub{font-size:14px;color:var(--muted);margin-top:4px}
+.alert-dist{font-size:44px;font-weight:900;text-align:center;margin:12px 0 2px;font-variant-numeric:tabular-nums}
+.alert-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:17px;margin:10px 0}
+.alert-dl dt{color:var(--muted)} .alert-dl dd{margin:0;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.alert-reason{background:var(--chip);border-radius:8px;padding:8px 10px;font-size:14px;margin:8px 0}
+.alert-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px}
+.logview-box{background:var(--panel);color:var(--ink);border-radius:12px;width:100%;max-width:900px;height:90vh;display:flex;flex-direction:column;padding:12px}
+.logview-box pre{flex:1;margin:8px 0;overflow:auto;background:var(--chip);border-radius:8px;padding:8px;font:11px/1.35 ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+/* diagnostika */
+.svc-sel{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.svc-sel button{padding:8px 10px;font-size:13px;letter-spacing:0;text-transform:none}
+.svc-sel button.sel{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.svc-sel button.off{opacity:.4}
+.dg-row{border-bottom:1px solid var(--line);padding:6px 0;display:grid;grid-template-columns:1fr auto;gap:2px 8px}
+.dg-row .nm{font-weight:700}.dg-row .nm small{font-weight:400;color:var(--muted)}
+.dg-row .val{font-size:14px}
+.dg-row .num{font:11.5px/1.35 ui-monospace,Consolas,monospace;color:var(--muted);word-break:break-all}
+.dg-row .acts{display:flex;gap:4px;align-items:start}
+.dg-row .acts button{background:var(--chip);border:1px solid var(--line);border-radius:8px;width:36px;height:34px;font-size:16px;cursor:pointer;color:var(--ink)}
+.dg-row .acts button.on{background:var(--accent);color:#fff}
+.set-sec{font-size:13px;font-weight:700;color:var(--accent);margin:14px 0 2px;text-transform:uppercase;letter-spacing:.04em}
+:root[data-theme="dark"] .set-sec{color:#8fa8ff}
 </style>
 </head>
 <body>
@@ -105,23 +156,39 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
   <span class="conn-dot" id="connDot" title="Stav připojení"></span>
   <button id="btnMute" title="Ztlumit alarm" hidden>🔔</button>
   <button id="btnDisconnect" title="Odpojit" hidden>⇋</button>
-  <button id="btnSettings" title="Nastavení">⚙</button>
+  <button id="btnTheme" title="Denní / noční vzhled">🌙</button>
+  <button id="btnSettings" title="Nastavení" hidden>⚙</button>
+  <button id="btnLogout" title="Odhlásit" hidden>🚪</button>
 </header>
 
 <main>
   <div class="banner" id="banner"></div>
 
+  <!-- 0. Přihlášení -->
+  <section class="screen active" id="scrLogin">
+    <div class="login-logo"><b>SHERLOG</b><span>RMJ · NEW GENERATION</span></div>
+    <fieldset><legend>Přihlášení</legend>
+      <label class="row"><span>Uživatel</span><input id="lgUser" autocomplete="username" autocapitalize="none"></label>
+      <label class="row"><span>Heslo</span><input id="lgPass" type="password" autocomplete="current-password"></label>
+      <label class="chk"><input type="checkbox" id="lgRemember"> Zapamatovat přihlášení na tomto zařízení</label>
+      <p class="err" id="lgErr"></p>
+      <button class="btn block" id="btnLogin">Přihlásit</button>
+      <p class="hint" id="lgInfo"></p>
+    </fieldset>
+  </section>
+
   <!-- 1. Zadání vstupních dat -->
-  <section class="screen active" id="scrInput">
+  <section class="screen" id="scrInput">
     <fieldset>
       <legend>Údaje strojvedoucího</legend>
       <label class="row"><span>Kontakt</span><input id="inKontakt" placeholder="Jméno / ID strojvedoucího" autocomplete="off"></label>
       <label class="row"><span>Telefonní číslo</span><input id="inTelefon" inputmode="tel" placeholder="703 470 195" autocomplete="off"></label>
       <label class="row"><span>Číslo vlaku</span><input id="inVlak" inputmode="numeric" placeholder="např. 845003" autocomplete="off"></label>
-      <p class="hint">Číslo vlaku a telefon se po každém připojení zapíší do jednotky (charakteristiky 0003 a 0004). Kontakt slouží jen pro log.</p>
+      <p class="hint">Vyplnění není povinné – údaje lze doplnit i po připojení (klepnutím na kartu Uživatel). Číslo vlaku a telefon se po každém připojení zapíší do jednotky (0003 a 0004).</p>
       <p class="err" id="inErr"></p>
     </fieldset>
     <button class="btn block" id="btnContinue">Pokračovat</button>
+    <button class="btn block secondary" id="btnInputBack" style="margin-top:10px" hidden>Zpět na hlavní panel</button>
   </section>
 
   <!-- 2. Vyhledání zařízení -->
@@ -147,11 +214,15 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
       <button class="btn secondary sel" data-tab="tabPrehled">Přehled</button>
       <button class="btn secondary" data-tab="tabRadar">Radar</button>
       <button class="btn secondary" data-tab="tabJednotka">Jednotka</button>
-      <button class="btn secondary" data-tab="tabDiag">Diagnostika</button>
+      <button class="btn secondary" data-tab="tabDiag" id="tabBtnDiag">Diagnostika</button>
     </div>
 
     <div class="tab" id="tabPrehled">
-      <fieldset><legend>Sledované údaje</legend>
+      <fieldset class="alertcard" id="cardAlert" hidden><legend>⚠ Alert</legend>
+        <div id="alertList"></div>
+        <p class="hint" style="margin:4px 0 0">Klepnutím zobrazíte podrobnosti.</p>
+      </fieldset>
+      <fieldset id="cardWatch"><legend>Sledované údaje</legend>
         <div class="signal">
           <div class="lamp" id="lamp">—</div>
           <div class="kpis">
@@ -163,11 +234,20 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
         </div>
         <div class="chips" id="localChips"></div>
       </fieldset>
-      <fieldset><legend>Vlaky v dosahu <span id="trainCount"></span></legend>
+      <fieldset id="cardTrains"><legend>Vlaky v dosahu <span id="trainCount"></span></legend>
         <div id="trains"><p class="hint">Zatím žádná přijatá jednotka.</p></div>
       </fieldset>
-      <fieldset><legend>Připojené zařízení</legend>
+      <fieldset id="cardUser" class="card-click"><legend>Uživatel – zadané údaje</legend>
+        <div class="summary"><div class="lines" id="sumUser"></div><div class="big-ico">👤</div></div>
+        <div class="edit-hint">Klepnutím upravíte</div>
+      </fieldset>
+      <fieldset id="cardDev"><legend>Připojené zařízení</legend>
         <div class="summary"><div class="lines" id="sumDev"></div><div class="big-ico">📡</div></div>
+      </fieldset>
+      <fieldset id="cardLog"><legend>Log</legend>
+        <div><b id="logName"></b> <span class="hint">· uloženo v aplikaci (prohlížeči)</span></div>
+        <pre class="logmini" id="logMini"></pre>
+        <div class="row-btns"><button class="btn secondary" id="btnLogSend">Odeslat</button><button class="btn secondary" id="btnLogShow">Zobrazit</button></div>
       </fieldset>
     </div>
 
@@ -197,28 +277,54 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
         </div>
         <pre class="log" id="logView"></pre>
       </fieldset>
-      <fieldset><legend>Charakteristiky (surová data)</legend>
-        <select id="diagUnit"></select>
-        <div style="overflow-x:auto;margin-top:8px"><table class="diag" id="diagTable"></table></div>
+      <fieldset><legend>Charakteristiky</legend>
+        <div class="svc-sel" id="svcSel"></div>
+        <div class="row-btns" style="margin-bottom:6px"><button class="btn secondary" id="btnDiagAll">⟳ Načíst vše</button></div>
+        <div id="diagList"></div>
       </fieldset>
     </div>
   </section>
 
   <!-- Nastavení -->
   <section class="screen" id="scrSettings">
-    <fieldset><legend>Komunikace</legend>
+    <fieldset class="adminOnly"><legend>Komunikace (admin)</legend>
       <label class="row"><span>Pořadí bajtů</span><select id="setEndian"><option value="le">Little-endian (výchozí)</option><option value="be">Big-endian</option></select></label>
       <label class="row"><span>Režim čtení</span><select id="setMode"><option value="notify">Notifikace TIMESTAMP</option><option value="poll">Periodické čtení</option></select></label>
       <label class="row"><span>Perioda čtení [ms]</span><input id="setPoll" type="number" min="200" step="100"></label>
       <label class="row"><span>Pomalé údaje [s]</span><input id="setSlow" type="number" min="1" step="1"></label>
       <label class="row"><span>Filtr názvu</span><input id="setPrefix" placeholder="D3R (prázdné = vše)"></label>
     </fieldset>
-    <fieldset><legend>Výstrahy</legend>
+    <fieldset><legend>Vyvolání alertu</legend>
+      <label class="chk"><input type="checkbox" id="setAlDist"> Podle vzdálenosti</label>
+      <label class="row"><span>Alert při vzdálenosti menší než [m]</span><input id="setAlDistM" type="number" min="10" step="10"></label>
+      <label class="chk"><input type="checkbox" id="setAlBit"> Podle 30. bitu (PBJ) v RX_FLAGS (0008)</label>
+      <label class="chk"><input type="checkbox" id="setAlCrash"> Podle času do střetu (≤ červený práh)</label>
+      <label class="chk"><input type="checkbox" id="setAlSos"> SOS nebo nehoda okolní jednotky</label>
+      <label class="row"><span>Rádiové kódy čety (začínají na)</span><input id="setCrew" placeholder="CETA,PRAC"></label>
+      <p class="hint">Jednotky, jejichž rádiový kód začíná některým z uvedených textů, se v alertu zobrazí jako pracovní četa (ikona čety), ostatní jako vlak.</p>
+    </fieldset>
+    <fieldset><legend>Výstrahy a barvy</legend>
       <label class="row"><span>Červená ≤ [s]</span><input id="setRed" type="number" min="0"></label>
       <label class="row"><span>Žlutá ≤ [s]</span><input id="setYellow" type="number" min="0"></label>
       <p class="hint">Prahy času do střetu pro obarvení vlaků v seznamu a na radaru. Hlavní semafor vždy přebírá stav z jednotky (0027).</p>
       <label class="row"><span>Zvuk alarmu</span><select id="setSound"><option value="1">Zapnuto</option><option value="0">Vypnuto</option></select></label>
       <label class="row"><span>Vzhled</span><select id="setTheme"><option value="light">Denní</option><option value="dark">Noční</option></select></label>
+    </fieldset>
+    <fieldset class="adminOnly"><legend>Diagnostika – zobrazení hodnot</legend>
+      <label class="chk"><input type="checkbox" id="setDDec"> Decimální hodnota</label>
+      <label class="chk"><input type="checkbox" id="setDHex"> Hexadecimální hodnota</label>
+      <label class="chk"><input type="checkbox" id="setDBin"> Binární hodnota</label>
+    </fieldset>
+    <fieldset><legend>Hlavní panel – zobrazené karty</legend>
+      <label class="chk"><input type="checkbox" id="setCWatch"> Sledované údaje</label>
+      <label class="chk"><input type="checkbox" id="setCTrains"> Vlaky v dosahu</label>
+      <label class="chk"><input type="checkbox" id="setCUser"> Uživatel</label>
+      <label class="chk"><input type="checkbox" id="setCDev"> Připojené zařízení</label>
+      <label class="chk"><input type="checkbox" id="setCLog"> Log</label>
+    </fieldset>
+    <fieldset><legend>Přihlášení</legend>
+      <label class="chk"><input type="checkbox" id="setAutologin"> Automatické přihlášení na tomto zařízení</label>
+      <p class="hint">Po vypnutí bude při dalším spuštění nutné zadat heslo. Uživatele spravuje admin v souboru users.json (nástroj uzivatele.html).</p>
     </fieldset>
     <button class="btn block" id="btnSettingsBack">Uložit a zpět</button>
     <p class="hint" style="text-align:center;margin-top:16px">SHERLOG RMJ PWA · verze <span id="ver"></span></p>
@@ -228,6 +334,19 @@ dialog::backdrop{background:rgba(0,0,0,.5)}
 <div class="bottombar" id="bottombar">
   <div class="hint" id="bbStatus" style="flex:1">—</div>
   <button class="sos" id="btnSos" title="Stiskněte 3× za sebou"><div class="fill" id="sosFill"></div><span>SOS</span></button>
+</div>
+
+<div class="overlay" id="alertOv">
+  <div class="alert-box" id="alertBox">
+    <div class="alert-head"><img class="alert-ico" id="alIco" src="ikona-vlak.png" alt=""><div><div class="alert-title" id="alTitle"></div><div class="alert-sub" id="alSub"></div></div></div>
+    <div class="alert-dist" id="alDist"></div>
+    <div class="alert-reason" id="alReason"></div>
+    <dl class="alert-dl" id="alDl"></dl>
+    <div class="alert-nav"><button class="btn secondary" id="alPrev">‹</button><span class="hint" id="alPos"></span><button class="btn secondary" id="alNext">›</button><button class="btn" id="alClose" style="flex:1">Zavřít</button></div>
+  </div>
+</div>
+<div class="overlay" id="logOv">
+  <div class="logview-box"><div class="row-btns" style="justify-content:space-between;align-items:center"><b id="logOvName"></b><span><button class="btn secondary" id="btnLogDl2">Stáhnout</button> <button class="btn" id="btnLogOvClose">Zavřít</button></span></div><pre id="logOvText"></pre></div>
 </div>
 
 <dialog id="dlg"><div id="dlgText"></div><div class="dlg-btns"><button class="btn secondary" id="dlgNo">Ne</button><button class="btn" id="dlgYes">Ano</button></div></dialog>
