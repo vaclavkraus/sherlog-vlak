@@ -166,7 +166,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
 
   <!-- 0. Přihlášení -->
   <section class="screen active" id="scrLogin">
-    <div class="login-logo"><b>SHERLOG</b><span>RMJ · NEW GENERATION</span></div>
+    <div class="login-logo"><b>SHERLOG</b><span>RMJ · NEW GENERATION</span><div class="hint" style="margin-top:6px;letter-spacing:0">verze <b id="verLogin" style="display:inline;font-size:inherit;letter-spacing:0;color:inherit">?</b></div></div>
     <fieldset><legend>Přihlášení</legend>
       <label class="row"><span>Uživatel</span><input id="lgUser" autocomplete="username" autocapitalize="none"></label>
       <label class="row"><span>Heslo</span><input id="lgPass" type="password" autocomplete="current-password"></label>
@@ -189,6 +189,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
     </fieldset>
     <button class="btn block" id="btnContinue">Pokračovat</button>
     <button class="btn block secondary" id="btnInputBack" style="margin-top:10px" hidden>Zpět na hlavní panel</button>
+    <p class="hint" style="text-align:center;margin-top:14px">SHERLOG RMJ · verze <b id="verInput">?</b></p>
   </section>
 
   <!-- 2. Vyhledání zařízení -->

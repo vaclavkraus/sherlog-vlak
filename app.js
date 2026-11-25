@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = {
@@ -957,7 +957,7 @@ function saveSettingsForm() {
 }
 
 function init() {
-  $('ver').textContent = APP_VERSION;
+  $('ver').textContent = APP_VERSION; $('verLogin').textContent = APP_VERSION; $('verInput').textContent = APP_VERSION;
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && curScreen === 'scrMain') keepAwake(); });
   applyTheme();
   $('inKontakt').value = input.kontakt; $('inTelefon').value = input.telefon; $('inVlak').value = input.vlak;
