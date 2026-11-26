@@ -190,11 +190,11 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
 <header>
   <h1 id="title">Zadání vstupních dat</h1>
   <span class="conn-dot" id="connDot" title="Stav připojení"></span>
-  <button id="btnMute" title="Ztlumit alarm" hidden><img class="hico" id="imgMute" src="ikony/ic_bell.svg" alt="Ztlumit"></button>
-  <button id="btnDisconnect" title="Odpojit" hidden><img class="hico" src="ikony/ic_disconnect.svg" alt="Odpojit"></button>
-  <button id="btnTheme" title="Denní / noční vzhled"><img class="hico" id="imgTheme" src="ikony/ic_moon.svg" alt="Vzhled"></button>
-  <button id="btnSettings" title="Nastavení" hidden><img class="hico" src="ikony/ic_settings.svg" alt="Nastavení"></button>
-  <button id="btnLogout" title="Odhlásit" hidden><img class="hico" src="ikony/ic_exit.svg" alt="Odhlásit"></button>
+  <button id="btnMute" title="Ztlumit alarm" hidden><img class="hico" id="imgMute" src="ic_bell.svg" alt="Ztlumit"></button>
+  <button id="btnDisconnect" title="Odpojit" hidden><img class="hico" src="ic_disconnect.svg" alt="Odpojit"></button>
+  <button id="btnTheme" title="Denní / noční vzhled"><img class="hico" id="imgTheme" src="ic_moon.svg" alt="Vzhled"></button>
+  <button id="btnSettings" title="Nastavení" hidden><img class="hico" src="ic_settings.svg" alt="Nastavení"></button>
+  <button id="btnLogout" title="Odhlásit" hidden><img class="hico" src="ic_exit.svg" alt="Odhlásit"></button>
 </header>
 
 <main>
@@ -202,7 +202,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
 
   <!-- 0. Přihlášení -->
   <section class="screen active" id="scrLogin">
-    <div class="login-logo"><img src="ikony/logo_sherlog.png" alt="SHERLOG NEW GENERATION"><span style="display:block;margin-top:8px">RMJ</span><div class="hint" style="margin-top:6px;letter-spacing:0">verze <b id="verLogin" style="display:inline;font-size:inherit;letter-spacing:0;color:inherit">?</b></div></div>
+    <div class="login-logo"><img src="logo_sherlog.png" alt="SHERLOG NEW GENERATION"><span style="display:block;margin-top:8px">RMJ</span><div class="hint" style="margin-top:6px;letter-spacing:0">verze <b id="verLogin" style="display:inline;font-size:inherit;letter-spacing:0;color:inherit">?</b></div></div>
     <fieldset><legend>Přihlášení</legend>
       <label class="row"><span>Uživatel</span><input id="lgUser" autocomplete="username" autocapitalize="none"></label>
       <label class="row"><span>Heslo</span><input id="lgPass" type="password" autocomplete="current-password"></label>
@@ -231,7 +231,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
   <!-- 2. Vyhledání zařízení -->
   <section class="screen" id="scrScan">
     <fieldset><legend>Zadané údaje</legend>
-      <div class="summary"><div class="lines" id="sumScan"></div><img class="ico" src="ikony/ic_person.svg" alt=""></div>
+      <div class="summary"><div class="lines" id="sumScan"></div><img class="ico" src="ic_person.svg" alt=""></div>
     </fieldset>
     <fieldset><legend>Nalezená zařízení</legend>
       <p class="hint" id="btSupport"></p>
@@ -255,11 +255,11 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
     </div>
 
     <div class="tab" id="tabPrehled">
-      <fieldset class="alertcard has-ico" id="cardAlert" hidden><legend>Alert</legend><img class="ico card-ico" src="ikony/ic_alert.svg" alt="" style="filter:none">
+      <fieldset class="alertcard has-ico" id="cardAlert" hidden><legend>Alert</legend><img class="ico card-ico" src="ic_alert.svg" alt="" style="filter:none">
         <div id="alertList"></div>
         <p class="hint" style="margin:4px 0 0">Klepnutím zobrazíte podrobnosti.</p>
       </fieldset>
-      <fieldset id="cardWatch" class="has-ico"><legend>Sledované údaje</legend><img class="ico card-ico" src="ikony/ic_eye.svg" alt="">
+      <fieldset id="cardWatch" class="has-ico"><legend>Sledované údaje</legend><img class="ico card-ico" src="ic_eye.svg" alt="">
         <div class="signal">
           <div class="lamp" id="lamp">—</div>
           <div class="kpis">
@@ -275,13 +275,13 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
         <div id="trains"><p class="hint">Zatím žádná přijatá jednotka.</p></div>
       </fieldset>
       <fieldset id="cardUser" class="card-click"><legend>Uživatel – zadané údaje</legend>
-        <div class="summary"><div class="lines" id="sumUser"></div><img class="ico" src="ikony/ic_person.svg" alt=""></div>
+        <div class="summary"><div class="lines" id="sumUser"></div><img class="ico" src="ic_person.svg" alt=""></div>
         <div class="edit-hint">Klepnutím upravíte</div>
       </fieldset>
       <fieldset id="cardDev"><legend>Připojené zařízení</legend>
-        <div class="summary"><div class="lines" id="sumDev"></div><img class="ico" src="ikony/ic_sherlog_blue.png" alt=""></div>
+        <div class="summary"><div class="lines" id="sumDev"></div><img class="ico" src="ic_sherlog_blue.png" alt=""></div>
       </fieldset>
-      <fieldset id="cardLog" class="has-ico"><legend>Log</legend><img class="ico card-ico" src="ikony/ic_log.svg" alt="">
+      <fieldset id="cardLog" class="has-ico"><legend>Log</legend><img class="ico card-ico" src="ic_log.svg" alt="">
         <div><b id="logName"></b> <span class="hint">· uloženo v aplikaci (prohlížeči)</span></div>
         <pre class="logmini" id="logMini"></pre>
         <div class="row-btns"><button class="btn secondary" id="btnLogSend">Odeslat</button><button class="btn secondary" id="btnLogShow">Zobrazit</button></div>
@@ -300,7 +300,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
         <dl class="dl" id="localDl"></dl>
       </fieldset>
       <fieldset><legend>Zadané údaje</legend>
-        <div class="summary"><div class="lines" id="sumMain"></div><img class="ico" src="ikony/ic_person.svg" alt=""></div>
+        <div class="summary"><div class="lines" id="sumMain"></div><img class="ico" src="ic_person.svg" alt=""></div>
         <button class="btn secondary block" id="btnRewrite" style="margin-top:8px">Znovu zapsat číslo vlaku a telefon</button>
       </fieldset>
     </div>
@@ -316,7 +316,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
       </fieldset>
       <fieldset><legend>Charakteristiky</legend>
         <div class="svc-sel" id="svcSel"></div>
-        <div class="row-btns" style="margin-bottom:6px"><button class="btn secondary" id="btnDiagAll"><img class="bi" src="ikony/ic_download_all.svg" alt="">Načíst vše</button></div>
+        <div class="row-btns" style="margin-bottom:6px"><button class="btn secondary" id="btnDiagAll"><img class="bi" src="ic_download_all.svg" alt="">Načíst vše</button></div>
         <div id="diagList"></div>
       </fieldset>
     </div>
@@ -326,13 +326,13 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
   <section class="screen" id="scrDriver">
     <div class="drv-state" id="drvState"><div class="dot" id="drvDot"></div><div><b id="drvTitle">—</b><span id="drvSub"></span></div></div>
     <fieldset class="card-click" id="drvUser"><legend>Zadané údaje</legend>
-      <div class="summary"><div class="lines" id="sumDrv"></div><img class="ico" src="ikony/ic_person.svg" alt=""></div>
+      <div class="summary"><div class="lines" id="sumDrv"></div><img class="ico" src="ic_person.svg" alt=""></div>
     </fieldset>
     <fieldset><legend>Připojené zařízení</legend>
-      <div class="summary"><div class="lines" id="sumDrvDev"></div><img class="ico" src="ikony/ic_sherlog_blue.png" alt=""></div>
+      <div class="summary"><div class="lines" id="sumDrvDev"></div><img class="ico" src="ic_sherlog_blue.png" alt=""></div>
     </fieldset>
     <div class="drv-sos-wrap">
-      <button class="drv-sos" id="drvSos"><div class="fill" id="drvSosFill"></div><img src="ikony/sos_icon.png" alt="SOS"></button>
+      <button class="drv-sos" id="drvSos"><div class="fill" id="drvSosFill"></div><img src="sos_icon.png" alt="SOS"></button>
       <div class="drv-sos-hint" id="drvSosHint">Pro vyhlášení SOS stiskněte 3× rychle za sebou</div>
     </div>
   </section>
@@ -385,7 +385,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
 
 <div class="bottombar" id="bottombar">
   <div class="hint" id="bbStatus" style="flex:1">—</div>
-  <button class="sos" id="btnSos" title="Stiskněte 3× za sebou"><div class="fill" id="sosFill"></div><img src="ikony/sos_icon.png" alt="SOS"></button>
+  <button class="sos" id="btnSos" title="Stiskněte 3× za sebou"><div class="fill" id="sosFill"></div><img src="sos_icon.png" alt="SOS"></button>
 </div>
 
 <div class="overlay" id="alertOv">

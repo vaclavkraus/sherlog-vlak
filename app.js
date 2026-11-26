@@ -518,7 +518,7 @@ function renderSummaries() {
   $('sumDev').innerHTML = `<div><b>${esc(name)}</b></div><div class="hint">${esc(device && !simulating ? device.id : '')}</div><div>${esc(st)}</div>`;
   const dc = $('connDot').className.includes('ok') ? 'var(--green)' : $('connDot').className.includes('err') ? 'var(--red)' : $('connDot').className.includes('wait') ? 'var(--yellow)' : 'var(--grey)';
   const okc = $('connDot').className.includes('ok');
-  const dot = `<img class="stat-ico" src="ikony/${okc ? 'ic_green_status' : 'ic_red_status'}.svg" alt="">`;
+  const dot = `<img class="stat-ico" src="${okc ? 'ic_green_status' : 'ic_red_status'}.svg" alt="">`;
   $('sumDrvDev').innerHTML = `<div><b>${esc(name)}</b></div><div>${dot}${esc(st)}</div>`;
   $('sumDev').innerHTML = `<div><b>${esc(name)}</b></div><div class="hint">${esc(device && !simulating ? device.id : '')}</div><div>${dot}${esc(st)}</div>`;
 }
@@ -568,8 +568,8 @@ function doRender() {
   $('kNearest').innerHTML = best ? esc(fmtDist(best.d)) + (best.one ? '' : ' <small>vzduš.</small>') : '—';
   let minC = null; for (const u of remotes) { const c = V(u, 0x0016); if (c.v && !c.away && (minC == null || c.v < minC)) minC = c.v; }
   $('kCrash').textContent = minC == null ? '—' : fmtDur(minC);
-  $('kSos').innerHTML = sosLocal ? '<span class="chip red">VLASTNÍ SOS</span>' : sosRemote.length ? '<span class="chip red">SOS: ' + sosRemote.map((u) => esc(trainName(u))).join(', ') + '</span>' : '<img class="ico sm" src="ikony/ic_cross.svg" alt="ne">';
-  $('kAlert').innerHTML = al.length ? '<span class="chip red">' + al.length + '× ALERT</span>' : level === 2 ? '<span class="chip red">ČERVENÁ</span>' : level === 1 ? '<span class="chip yellow">ŽLUTÁ</span>' : '<img class="ico sm" src="ikony/ic_cross.svg" alt="ne">';
+  $('kSos').innerHTML = sosLocal ? '<span class="chip red">VLASTNÍ SOS</span>' : sosRemote.length ? '<span class="chip red">SOS: ' + sosRemote.map((u) => esc(trainName(u))).join(', ') + '</span>' : '<img class="ico sm" src="ic_cross.svg" alt="ne">';
+  $('kAlert').innerHTML = al.length ? '<span class="chip red">' + al.length + '× ALERT</span>' : level === 2 ? '<span class="chip red">ČERVENÁ</span>' : level === 1 ? '<span class="chip yellow">ŽLUTÁ</span>' : '<img class="ico sm" src="ic_cross.svg" alt="ne">';
   $('btnSos').classList.toggle('on', sosLocal);
 
   // vlastní příznaky
@@ -680,7 +680,7 @@ function renderDriver(al, remotes, sosLocal) {
     let best = null; for (const u of remotes) { const d = (u.val[0x0015] && u.val[0x0015].v) || (u.val[0x0014] && u.val[0x0014].v); if (d && (best == null || d < best)) best = d; }
     sub = remotes.length ? `V dosahu ${remotes.length} ${remotes.length === 1 ? 'jednotka' : remotes.length < 5 ? 'jednotky' : 'jednotek'}, nejbližší ${fmtDist(best)}` : 'Žádný vlak v dosahu';
   }
-  st.className = 'drv-state ' + cls; if ($('drvDot').dataset.i !== icon) { $('drvDot').dataset.i = icon; $('drvDot').innerHTML = `<img src="ikony/${icon === 'ic_alert' ? 'alert_image' : icon}.svg" alt="">`; } $('drvTitle').textContent = title; $('drvSub').textContent = sub;
+  st.className = 'drv-state ' + cls; if ($('drvDot').dataset.i !== icon) { $('drvDot').dataset.i = icon; $('drvDot').innerHTML = `<img src="${icon === 'ic_alert' ? 'alert_image' : icon}.svg" alt="">`; } $('drvTitle').textContent = title; $('drvSub').textContent = sub;
   $('drvSos').classList.toggle('on', sosLocal);
   const h = $('drvSosHint'); h.classList.toggle('on', sosLocal);
   h.textContent = sosLocal ? 'SOS VYHLÁŠENO – pro zrušení stiskněte znovu 3×' : 'Pro vyhlášení SOS stiskněte 3× rychle za sebou';
@@ -789,7 +789,7 @@ function renderDiag() {
       const prop = p ? [p.read && 'READ', (p.write || p.writeWithoutResponse) && 'WRITE', p.notify && 'NOTIFY', p.indicate && 'INDICATE'].filter(Boolean).join(', ') : simulating ? 'simulace' : 'nenalezena';
       const canN = p && (p.notify || p.indicate);
       return `<div class="dg-row" data-id="${id}"><div><div class="nm">${esc(D[id] ? D[id].l : '?')} <small>${hex4(id)} · ${esc(D[id] ? D[id].n : '')} · ${prop}</small></div><div class="val" id="dgv${id}"></div><div class="num" id="dgn${id}"></div></div>
-        <div class="acts">${p && p.read ? `<button data-act="read" title="Načíst"><img src="ikony/ic_refresh.svg" alt="načíst"></button>` : ''}${canN ? `<button data-act="notif" class="${notif.has(id) ? 'on' : ''}" title="Notifikace"><img src="ikony/${notif.has(id) ? 'ic_bell' : 'ic_bell_slash'}.svg" alt="notifikace"></button>` : ''}</div></div>`;
+        <div class="acts">${p && p.read ? `<button data-act="read" title="Načíst"><img src="ic_refresh.svg" alt="načíst"></button>` : ''}${canN ? `<button data-act="notif" class="${notif.has(id) ? 'on' : ''}" title="Notifikace"><img src="${notif.has(id) ? 'ic_bell' : 'ic_bell_slash'}.svg" alt="notifikace"></button>` : ''}</div></div>`;
     }).join('');
   }
   const now = Date.now();
@@ -903,7 +903,7 @@ function confirmDlg(text) {
 }
 
 /* ====================== Inicializace ====================== */
-function applyTheme() { document.documentElement.dataset.theme = S.theme; const b = $('imgTheme'); if (b) b.src = 'ikony/' + (S.theme === 'dark' ? 'ic_sun' : 'ic_moon') + '.svg'; }
+function applyTheme() { document.documentElement.dataset.theme = S.theme; const b = $('imgTheme'); if (b) b.src = '' + (S.theme === 'dark' ? 'ic_sun' : 'ic_moon') + '.svg'; }
 
 /* ====================== Uživatelé a přihlášení ======================
  * Centrální seznam users.json (v repozitáři vedle aplikace) – hesla jen jako PBKDF2-SHA256 hash se solí.
@@ -1057,7 +1057,7 @@ function init() {
   $('btnSettings').onclick = () => { loadSettingsForm(); showScreen('scrSettings'); };
   $('btnSettingsBack').onclick = () => { saveSettingsForm(); showScreen(prevScreen); };
   $('btnDisconnect').onclick = async () => { if (await confirmDlg('<b>Odpojit?</b><p>Chcete se odpojit od ' + esc(simulating ? 'simulace' : (device && device.name) || 'jednotky') + '?</p>')) disconnect(); };
-  $('btnMute').onclick = () => { muteUntil = Date.now() + 60000; $('imgMute').src = 'ikony/ic_bell_slash.svg'; setTimeout(() => { $('imgMute').src = 'ikony/ic_bell.svg'; }, 60000); log('Alarm ztlumen na 60 s'); };
+  $('btnMute').onclick = () => { muteUntil = Date.now() + 60000; $('imgMute').src = 'ic_bell_slash.svg'; setTimeout(() => { $('imgMute').src = 'ic_bell.svg'; }, 60000); log('Alarm ztlumen na 60 s'); };
   $('btnRewrite').onclick = () => { if (simulating) return; writeIdentity().then(() => banner('')).catch((e) => banner('Zápis selhal: ' + errText(e), 'red')); };
   $('btnLogDl').onclick = () => download(logFileName(), logLines.join('\r\n'), 'text/plain');
   $('btnCsvDl').onclick = () => download(`sherlog_${today()}.csv`, ['cas;slot;radkod;vlak;flags;status;lat;lon;rychlost_kmh;smer;dist1d_m;dist2d_m;crashtime_s;sat', ...csvRows.map((r) => r.join(';'))].join('\r\n'), 'text/csv');
