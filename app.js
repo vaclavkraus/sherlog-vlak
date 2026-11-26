@@ -2,7 +2,7 @@
  * Specifikace: "Přehled parametrů Bluetooth LE pro SHERLOG VLAK, 15.03.2026"
  */
 'use strict';
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 
 /* ====================== Nastavení ====================== */
 const DEFAULTS = {
@@ -998,7 +998,7 @@ function saveSettingsForm() {
   for (const [el, k] of Object.entries(CHK)) S[k] = $(el).checked;
   S.alDistM = Math.max(10, +$('setAlDistM').value || DEFAULTS.alDistM); S.crew = $('setCrew').value.trim().toUpperCase();
   if (!S.autologin) { try { localStorage.removeItem('sv.session'); } catch (e) { /* ignore */ } } else if (user) saveSession(user, true);
-  S.prefix = $('setPrefix').value.trim(); S.red = +$('setRed').value || 0; S.yellow = +$('setYellow').value || 0; S.sound = $('setSound').value; S.theme = $('setTheme').value;
+  S.prefix = $('setPrefix').value.trim(); $('scanPrefix').value = S.prefix; S.red = +$('setRed').value || 0; S.yellow = +$('setYellow').value || 0; S.sound = $('setSound').value; S.theme = $('setTheme').value;
   LS.set('sv.settings', S); applyTheme(); log('Nastavení uloženo: ' + JSON.stringify(S));
 }
 
@@ -1052,7 +1052,12 @@ function init() {
   };
   $('btnDiagAll').onclick = async () => { const u = unitBy(diagSvc); if (simulating || !connected || !u) return; for (const id of u.chars.keys()) { if (u.chars.get(id).properties.read) await readChar(u, id).catch(() => {}); } renderDiag(); };
   $('btnBackInput').onclick = () => showScreen('scrInput');
-  $('btnScan').onclick = () => { ensureAudio(); scanAndConnect(); };
+  $('scanPrefix').value = S.prefix;
+  $('btnScan').onclick = () => {
+    const pf = $('scanPrefix').value.trim();
+    if (pf !== S.prefix) { S.prefix = pf; LS.set('sv.settings', S); log('Filtr názvu zařízení: "' + pf + '"'); }
+    ensureAudio(); scanAndConnect();
+  };
   $('btnSim').onclick = () => { ensureAudio(); startSim(); };
   $('btnSettings').onclick = () => { loadSettingsForm(); showScreen('scrSettings'); };
   $('btnSettingsBack').onclick = () => { saveSettingsForm(); showScreen(prevScreen); };

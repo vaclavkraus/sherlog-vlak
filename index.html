@@ -236,6 +236,7 @@ label.chk input{width:22px;height:22px;flex:0 0 auto}
     <fieldset><legend>Nalezená zařízení</legend>
       <p class="hint" id="btSupport"></p>
       <div id="knownDevices"></div>
+      <label class="row"><span>Zobrazit jen zařízení začínající na</span><input id="scanPrefix" placeholder="D3R (prázdné = všechna)" autocapitalize="characters"></label>
       <button class="btn block" id="btnScan">Vyhledat a připojit jednotku</button>
       <p class="hint">Chrome otevře seznam BLE zařízení v dosahu, vyberte jednotku SHERLOG (např. D3R_Sherlog_TEST) a potvrďte „Spárovat“.</p>
       <p class="err" id="scanErr"></p>
